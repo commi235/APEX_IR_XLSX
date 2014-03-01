@@ -1,8 +1,4 @@
---------------------------------------------------------
---  DDL for Package XLSX_BUILDER_PKG
---------------------------------------------------------
-
-  CREATE OR REPLACE EDITIONABLE PACKAGE "XLSX_BUILDER_PKG" 
+CREATE OR REPLACE PACKAGE "XLSX_BUILDER_PKG" 
 is
 /**********************************************
 **
@@ -35,7 +31,8 @@ is
 **     Added list_validation = drop-down 
 **   Date: 27-08-2013
 **     Added freeze_pane
-**
+**   Date: 01-03-2014
+**     Changed new_sheet to function returning sheet id
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2012 by Anton Scheffer
@@ -198,7 +195,8 @@ THE SOFTWARE.
     
   procedure clear_workbook;
 --
-  procedure new_sheet( p_sheetname varchar2 := null );
+  FUNCTION new_sheet( p_sheetname VARCHAR2 := NULL )
+    RETURN PLS_INTEGER;
 --
   function OraFmt2Excel( p_format varchar2 := null )
   return varchar2;

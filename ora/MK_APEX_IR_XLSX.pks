@@ -1,9 +1,5 @@
---------------------------------------------------------
---  DDL for Package MK_APEX_IR_XLSX
---------------------------------------------------------
-
-  CREATE OR REPLACE EDITIONABLE PACKAGE "MK_APEX_IR_XLSX" 
-AUTHID DEFINER
+CREATE OR REPLACE PACKAGE "MK_APEX_IR_XLSX" 
+  AUTHID DEFINER
 AS 
 
   /* Feature Set:

@@ -1,11 +1,8 @@
---------------------------------------------------------
---  DDL for Package Body MK_APEX_IR_XLSX
---------------------------------------------------------
-
-  CREATE OR REPLACE EDITIONABLE PACKAGE BODY "MK_APEX_IR_XLSX" 
+CREATE OR REPLACE PACKAGE BODY "MK_APEX_IR_XLSX" 
 AS
 
 /* Constants */
+  c_bulk_size CONSTANT pls_integer := 200;
 
 /* TYPE Definitions */  
   TYPE t_apex_ir_highlight IS RECORD
@@ -47,6 +44,8 @@ AS
     , session_id NUMBER -- Session ID for Request
     , base_report_id NUMBER -- Report ID for Request
     , report_title VARCHAR2(4000) -- Derived Report Title
+    , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
+    , final_sql VARCHAR2(32767)
     )
   ;
 
@@ -57,6 +56,8 @@ AS
     , process_highlights BOOLEAN -- format data according to highlights
     , show_highlights BOOLEAN -- show header lines with highlight settings, not useful if set without above
     , show_aggregates BOOLEAN -- process aggregates and show on total lines
+    , display_column_count NUMBER -- holds the count of displayed columns, used for merged cells in header section
+    , sheet PLS_INTEGER -- holds the worksheet reference
     )
   ;
 /* Global Variables */
@@ -67,7 +68,6 @@ AS
   g_col_settings t_apex_ir_cols;
   g_row_highlights t_apex_ir_highlights;
   g_col_highlights t_apex_ir_highlights;
-  g_highlight_sql VARCHAR2(4000);
 
 /* Support Procedures */
 
@@ -221,11 +221,10 @@ AS
       col_rec.affected_column := rec.condition_column_name;
       IF rec.condition_column_name IS NOT NULL AND g_col_settings.EXISTS(rec.condition_column_name) THEN
         g_col_highlights('HL_' || to_char(hl_num)) := col_rec;
-        --g_col_settings(rec.condition_column_name).highlight_conds('HL_' || to_char(hl_num)) := col_rec;
       ELSE
         g_row_highlights('HL_' || to_char(hl_num)) := col_rec;
       END IF;
-      g_highlight_sql := g_highlight_sql || ', ' || col_rec.highlight_sql || ' AS HL_' || to_char(hl_num);
+      g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || ', ' || col_rec.highlight_sql || ' AS HL_' || to_char(hl_num);
     END LOOP;
   END get_highlights;
 
@@ -258,21 +257,16 @@ AS
     )
   RETURN BLOB
   AS
-    l_sheet pls_integer;
     l_cursor integer;
     l_col_cnt integer;
     l_desc_tab dbms_sql.desc_tab2;
     l_date_tab dbms_sql.date_table;
     l_num_tab dbms_sql.number_table;
     l_vc_tab dbms_sql.varchar2_table;
-    l_hl_tab dbms_sql.number_table; --
-    t_bulk_size pls_integer := 200;
+    l_hl_tab dbms_sql.number_table;
     t_r integer;
     l_cur_row pls_integer := 1;
     col_num NUMBER := 0;
-    l_ir_report apex_ir.t_report;
-    l_first_from_position NUMBER;
-    l_sql VARCHAR(32000);
     l_cur_col_name VARCHAR2(4000);
     l_num_val NUMBER;
     l_cur_col_highlight t_apex_ir_highlight;
@@ -284,6 +278,7 @@ AS
     g_apex_ir_info.session_id := p_ir_session_id;
     g_apex_ir_info.region_id := p_ir_region_id;
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
+    g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
     
     -- Generation Options
     g_xlsx_options.show_aggregates := p_aggregates;
@@ -292,31 +287,31 @@ AS
     g_xlsx_options.show_filters := p_show_filters;
     g_xlsx_options.show_highlights := p_show_highlights;
     g_xlsx_options.show_column_headers := p_column_headers;
-    get_col_settings(); --column settings
+    g_xlsx_options.sheet := ax_xlsx_builder.new_sheet; -- needed before running any ax_xlsx_builder commands
 
-    -- get ir report query and binds
-    l_ir_report := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
-    
+    -- retrieve column infos
+    get_col_settings();
+
     -- Split sql query on first from and inject highlight conditions
-    l_first_from_position := INSTR(UPPER(l_ir_report.sql_query), ' FROM');
-    l_sql := SUBSTR(l_ir_report.sql_query, 1, l_first_from_position) 
-          || g_highlight_sql
-          || SUBSTR(l_ir_report.sql_query, l_first_from_position);
+    g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM')) 
+                             || g_apex_ir_info.final_sql
+                             || SUBSTR(g_apex_ir_info.report_definition.sql_query, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
     
-    ax_xlsx_builder.new_sheet;
     l_cursor := dbms_sql.open_cursor;
-    dbms_sql.parse( l_cursor, l_sql, dbms_sql.NATIVE );
+    dbms_sql.parse( l_cursor, g_apex_ir_info.final_sql, dbms_sql.NATIVE );
     dbms_sql.describe_columns2( l_cursor, l_col_cnt, l_desc_tab );
+    
+    /* Bind values from IR structure*/
+    FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP
+      dbms_sql.bind_variable( l_cursor, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
+    END LOOP;
 
 /* Amend column settings and create header row */    
-    FOR c IN 1 .. l_col_cnt loop
+    FOR c IN 1 .. l_col_cnt LOOP
       IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
         IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
           g_col_settings(l_desc_tab(c).col_name).col_num := c;
-          IF g_xlsx_options.show_column_headers THEN
-            col_num := col_num + 1;
-            ax_xlsx_builder.cell( col_num, l_cur_row, g_col_settings(l_desc_tab(c).col_name).report_label, p_sheet => l_sheet );
-          END IF;
+          col_num := col_num + 1;
         END IF;
       ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
         g_row_highlights(l_desc_tab(c).col_name).col_num := c;
@@ -327,26 +322,28 @@ AS
       END IF;
       
       CASE
-        when l_desc_tab( c ).col_type in ( 2, 100, 101 ) then
-          dbms_sql.define_array( l_cursor, c, l_num_tab, t_bulk_size, 1 );
-        when l_desc_tab( c ).col_type in ( 12, 178, 179, 180, 181 , 231 ) then
-          dbms_sql.define_array( l_cursor, c, l_date_tab, t_bulk_size, 1 );
-        when l_desc_tab( c ).col_type in ( 1, 8, 9, 96, 112 ) then
-          dbms_sql.define_array( l_cursor, c, l_vc_tab, t_bulk_size, 1 );
-        else
-          null;
+        WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
+          dbms_sql.define_array( l_cursor, c, l_num_tab, c_bulk_size, 1 );
+        WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
+          dbms_sql.define_array( l_cursor, c, l_date_tab, c_bulk_size, 1 );
+        WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
+          dbms_sql.define_array( l_cursor, c, l_vc_tab, c_bulk_size, 1 );
+        ELSE
+          NULL;
       END CASE;
-    end loop;
-
-/* Bind values */
-    FOR i IN 1..l_ir_report.binds.count LOOP
-      SYS.DBMS_SQL.BIND_VARIABLE( l_cursor, l_ir_report.binds(i).name, l_ir_report.binds(i).value);
     END LOOP;
-    
---
-    l_cur_row := l_cur_row + CASE WHEN g_xlsx_options.show_column_headers THEN 1 ELSE 0 END;
-    l_sheet := ax_xlsx_builder.get_workbook().sheets.count();
---
+    g_xlsx_options.display_column_count := col_num;
+
+    col_num := 0;
+    IF g_xlsx_options.show_column_headers THEN
+      FOR c IN 1..l_col_cnt LOOP
+        col_num := col_num + 1;
+        ax_xlsx_builder.cell( col_num, l_cur_row, g_col_settings(l_desc_tab(c).col_name).report_label, p_sheet => g_xlsx_options.sheet );
+      END LOOP;
+      l_cur_row := l_cur_row + 1;
+    END IF;
+
+    -- Start looping through the "real" data
     t_r := dbms_sql.execute( l_cursor );
     loop
       t_r := dbms_sql.fetch_rows( l_cursor );
@@ -415,12 +412,12 @@ AS
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
                                                                                 , p_fgRGB => l_active_col_highlights(i).bg_color
                                                                                 )
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     ELSE
                       ax_xlsx_builder.cell( p_col => col_num
                                           , p_row => l_cur_row + i
                                           , p_value => l_num_tab( i + l_num_tab.FIRST() )
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     END IF;
                   END loop;
                   l_num_tab.DELETE;
@@ -437,12 +434,12 @@ AS
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
                                                                                 , p_fgRGB => l_active_col_highlights(i).bg_color
                                                                                 )
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     ELSE
                       ax_xlsx_builder.cell( p_col => col_num
                                           , p_row => l_cur_row + i
                                           , p_value => l_date_tab( i + l_date_tab.FIRST() )
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     END IF;
                   end loop;
                   l_date_tab.delete;
@@ -460,13 +457,13 @@ AS
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
                                                                                 , p_fgRGB => l_active_col_highlights(i).bg_color
                                                                                 )
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     ELSE
                       ax_xlsx_builder.cell( p_col => col_num
                                           , p_row => l_cur_row + i
                                           , p_value => l_vc_tab( i + l_vc_tab.FIRST() )
                                           , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
-                                          , p_sheet => l_sheet );
+                                          , p_sheet => g_xlsx_options.sheet );
                     END IF;
                   END loop;
                   l_vc_tab.delete;
@@ -477,7 +474,7 @@ AS
           END IF;
         END LOOP;
       end if;
-      exit when t_r != t_bulk_size;
+      exit when t_r != c_bulk_size;
       l_cur_row := l_cur_row + t_r;
     end loop;
     dbms_sql.close_cursor( l_cursor );

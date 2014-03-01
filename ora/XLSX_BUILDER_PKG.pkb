@@ -1,8 +1,4 @@
---------------------------------------------------------
---  DDL for Package Body XLSX_BUILDER_PKG
---------------------------------------------------------
-
-  CREATE OR REPLACE EDITIONABLE PACKAGE BODY "XLSX_BUILDER_PKG" 
+  CREATE OR REPLACE PACKAGE BODY "XLSX_BUILDER_PKG" 
 is
 
   workbook tp_book;
@@ -268,32 +264,30 @@ is
     workbook := null;
   end;
 --
-  procedure new_sheet( p_sheetname varchar2 := null )
+  FUNCTION new_sheet( p_sheetname VARCHAR2 := NULL )
+    RETURN PLS_INTEGER
   is
     t_nr pls_integer := workbook.sheets.count() + 1;
     t_ind pls_integer;
   begin
-    workbook.sheets( t_nr ).name := nvl( dbms_xmlgen.convert( translate( p_sheetname, 'a/\[]*:?', 'a' ) ), 'Sheet' || t_nr );
-    if workbook.strings.count() = 0
-    THEN
+    workbook.sheets( t_nr ).NAME := nvl( dbms_xmlgen.CONVERT( translate( p_sheetname, 'a/\[]*:?', 'a' ) ), 'Sheet' || t_nr );
+    IF workbook.strings.count() = 0 THEN
       workbook.str_cnt := 0;
       -- MKLEIN (2014/02/24): Insert NULL into strings on known position
       t_ind := add_string(NULL);
-      
-    end if;
-    if workbook.fonts.count() = 0
-    then
+    END IF;
+    if workbook.fonts.count() = 0 THEN
       t_ind := get_font( 'Calibri' );
     end if;
-    if workbook.fills.count() = 0
-    then
+    if workbook.fills.count() = 0 then
       t_ind := get_fill( 'none' );
       t_ind := get_fill( 'gray125' );
     end if;
-    if workbook.borders.count() = 0
-    then
+    if workbook.borders.count() = 0 then
       t_ind := get_border( '', '', '', '' );
     END IF;
+    
+    RETURN t_nr;
   end;
 --
   procedure set_col_width
@@ -1751,10 +1745,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     t_r integer;
     t_cur_row pls_integer;
   begin
-    if p_sheet is null
-    then
-      new_sheet;
-    end if;
+    t_sheet := COALESCE(p_sheet, new_sheet);
     t_c := dbms_sql.open_cursor;
     dbms_sql.parse( t_c, p_sql, dbms_sql.native );
     dbms_sql.describe_columns2( t_c, t_col_cnt, t_desc_tab );
@@ -1780,8 +1771,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       end case;
     end loop;
 --
-    t_cur_row := case when p_column_headers then 2 else 1 end;
-    t_sheet := nvl( p_sheet, workbook.sheets.count() );
+    t_cur_row := CASE WHEN p_column_headers THEN 2 ELSE 1 END;
 --
     t_r := dbms_sql.execute( t_c );
     loop
