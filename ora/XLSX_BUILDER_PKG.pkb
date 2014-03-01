@@ -1,6 +1,10 @@
-  CREATE OR REPLACE PACKAGE BODY "XLSX_BUILDER_PKG" 
-is
+CREATE OR REPLACE PACKAGE BODY "XLSX_BUILDER_PKG" 
+IS
 
+  /* Constants */
+  
+
+  /* Globals */
   workbook tp_book;
 --
   FUNCTION get_workbook
@@ -226,9 +230,9 @@ is
       t_cnt := workbook.strings.count();
       workbook.str_ind( t_cnt ) := p_string;
       workbook.strings( nvl( p_string, '' ) ) := t_cnt;
-    end if;
+    END IF;
     workbook.str_cnt := workbook.str_cnt + 1;
-    return t_cnt;
+    RETURN t_cnt;
   END;
 --
   procedure clear_workbook
@@ -276,8 +280,8 @@ is
       -- MKLEIN (2014/02/24): Insert NULL into strings on known position
       t_ind := add_string(NULL);
     END IF;
-    if workbook.fonts.count() = 0 THEN
-      t_ind := get_font( 'Calibri' );
+    IF workbook.fonts.count() = 0 THEN
+      t_ind := get_font( 'Arial' );
     end if;
     if workbook.fills.count() = 0 then
       t_ind := get_fill( 'none' );
@@ -368,40 +372,39 @@ is
     return t_numFmtId;
   end;
 --
-  function get_font
-    ( p_name varchar2
+  FUNCTION get_font
+    ( p_name VARCHAR2
     , p_family pls_integer := 2
-    , p_fontsize number := 11
+    , p_fontsize number := 10
     , p_theme pls_integer := 1
     , p_underline boolean := false
     , p_italic boolean := false
     , p_bold boolean := false
     , p_rgb varchar2 := null -- this is a hex ALPHA Red Green Blue value
     )
-  return pls_integer
-  is
+  RETURN pls_integer
+  IS
     t_ind pls_integer;
-  begin
-    if workbook.fonts.count() > 0
-    then
-      for f in 0 .. workbook.fonts.count() - 1
-      loop
-        if (   workbook.fonts( f ).name = p_name
-           and workbook.fonts( f ).family = p_family
-           and workbook.fonts( f ).fontsize = p_fontsize
-           and workbook.fonts( f ).theme = p_theme
-           and workbook.fonts( f ).underline = p_underline
-           and workbook.fonts( f ).italic = p_italic
-           and workbook.fonts( f ).bold = p_bold
-           and ( workbook.fonts( f ).rgb = p_rgb
-               or ( workbook.fonts( f ).rgb is null and p_rgb is null )
+  BEGIN
+    IF workbook.fonts.count() > 0 THEN
+      FOR f IN 0 .. workbook.fonts.count() - 1 LOOP
+        IF ( workbook.fonts( f ).NAME = p_name
+         and workbook.fonts( f ).family = p_family
+         and workbook.fonts( f ).fontsize = p_fontsize
+         and workbook.fonts( f ).theme = p_theme
+         and workbook.fonts( f ).underline = p_underline
+         and workbook.fonts( f ).italic = p_italic
+         and workbook.fonts( f ).bold = p_bold
+         AND ( workbook.fonts( f ).rgb = p_rgb
+            OR ( workbook.fonts( f ).rgb IS NULL
+             AND p_rgb IS NULL 
                )
-           )
-        then
-          return f;
-        end if;
-      end loop;
-    end if;
+             )
+           ) THEN
+          RETURN f;
+        END IF;
+      END LOOP;
+    END IF;
     t_ind := workbook.fonts.count();
     workbook.fonts( t_ind ).name := p_name;
     workbook.fonts( t_ind ).family := p_family;

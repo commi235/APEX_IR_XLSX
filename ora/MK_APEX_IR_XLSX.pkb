@@ -31,7 +31,7 @@ AS
     , count_on_break BOOLEAN
     , count_distinct_on_break BOOLEAN
     , highlight_conds t_apex_ir_highlights
-    , col_num NUMBER
+    , col_num NUMBER -- defines which SQL column to check
     )
   ;
   
@@ -306,12 +306,12 @@ AS
       dbms_sql.bind_variable( l_cursor, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
     END LOOP;
 
-/* Amend column settings and create header row */    
+    /* Amend column settings and create header row */    
     FOR c IN 1 .. l_col_cnt LOOP
       IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
         IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
           g_col_settings(l_desc_tab(c).col_name).col_num := c;
-          col_num := col_num + 1;
+          col_num := col_num + 1; -- count number of displayed columns
         END IF;
       ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
         g_row_highlights(l_desc_tab(c).col_name).col_num := c;
@@ -337,8 +337,11 @@ AS
     col_num := 0;
     IF g_xlsx_options.show_column_headers THEN
       FOR c IN 1..l_col_cnt LOOP
-        col_num := col_num + 1;
-        ax_xlsx_builder.cell( col_num, l_cur_row, g_col_settings(l_desc_tab(c).col_name).report_label, p_sheet => g_xlsx_options.sheet );
+        IF g_col_settings.EXISTS(l_desc_tab(c).col_name)
+       AND g_col_settings(l_desc_tab(c).col_name).is_visible THEN
+          col_num := col_num + 1;
+          ax_xlsx_builder.cell( col_num, l_cur_row, g_col_settings(l_desc_tab(c).col_name).report_label, p_sheet => g_xlsx_options.sheet );
+        END IF;
       END LOOP;
       l_cur_row := l_cur_row + 1;
     END IF;
@@ -355,7 +358,7 @@ AS
           FOR i IN 0 .. t_r - 1 LOOP
             IF (l_num_tab(i + l_num_tab.FIRST()) IS NOT NULL) THEN
               ax_xlsx_builder.set_row( p_row => l_cur_row + i
-                                     , p_fontId => ax_xlsx_builder.get_font( p_name => 'Calibri'
+                                     , p_fontId => ax_xlsx_builder.get_font( p_name => 'Arial'
                                                                            , p_rgb => g_row_highlights(l_cur_col_name).font_color
                                                                            )
                                      , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
@@ -406,7 +409,7 @@ AS
                       ax_xlsx_builder.cell( p_col => col_num
                                           , p_row => l_cur_row + i
                                           , p_value => l_num_tab( i + l_num_tab.FIRST() )
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Calibri'
+                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Arial'
                                                                                 , p_rgb => l_active_col_highlights(i).font_color
                                                                                 )
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
@@ -428,7 +431,7 @@ AS
                       ax_xlsx_builder.cell( p_col => col_num
                                           , p_row => l_cur_row + i
                                           , p_value => l_date_tab( i + l_date_tab.FIRST() )
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Calibri'
+                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Arial'
                                                                                 , p_rgb => l_active_col_highlights(i).font_color
                                                                                 )
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
@@ -441,7 +444,7 @@ AS
                                           , p_value => l_date_tab( i + l_date_tab.FIRST() )
                                           , p_sheet => g_xlsx_options.sheet );
                     END IF;
-                  end loop;
+                  END loop;
                   l_date_tab.delete;
                 WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
                   dbms_sql.column_value( l_cursor, c, l_vc_tab );
@@ -451,7 +454,7 @@ AS
                                           , p_row => l_cur_row + i
                                           , p_value => l_vc_tab( i + l_vc_tab.FIRST() )
                                           , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Calibri'
+                                          , p_fontId => ax_xlsx_builder.get_font( p_name => 'Arial'
                                                                                 , p_rgb => l_active_col_highlights(i).font_color
                                                                                 )
                                           , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
