@@ -3,6 +3,9 @@ AS
 
 /* Constants */
   c_bulk_size CONSTANT pls_integer := 200;
+  c_col_type_vc CONSTANT VARCHAR2(30) := 'VARCHAR';
+  c_col_type_num CONSTANT VARCHAR2(30) := 'NUMBER';
+  c_col_type_date CONSTANT VARCHAR2(30) := 'DATE';
 
 /* TYPE Definitions */  
   TYPE t_apex_ir_highlight IS RECORD
@@ -60,8 +63,25 @@ AS
     , display_column_count NUMBER -- holds the count of displayed columns, used for merged cells in header section
     , sheet PLS_INTEGER -- holds the worksheet reference
     , default_font VARCHAR2(100)
+    , default_border_color VARCHAR2(100)
     )
   ;
+  
+  TYPE t_sql_col_info IS RECORD
+    ( col_name VARCHAR2(32767)
+    , col_type VARCHAR2(30)
+    , is_displayed BOOLEAN := FALSE -- assume no display, we loop through all and flag displayed then
+    );
+  
+  TYPE t_sql_col_infos IS TABLE OF t_sql_col_info INDEX BY PLS_INTEGER;
+  
+  TYPE t_cursor_info IS RECORD
+    ( cursor_id PLS_INTEGER
+    , column_count PLS_INTEGER
+    , date_tab dbms_sql.date_table
+    , num_tab dbms_sql.number_table
+    , vc_tab dbms_sql.varchar2_table
+    );
   
 /* Global Variables */
  
@@ -72,6 +92,8 @@ AS
   g_row_highlights t_apex_ir_highlights;
   g_col_highlights t_apex_ir_highlights;
   g_current_row PLS_INTEGER := 1;
+  g_cursor_info t_cursor_info;
+  g_sql_columns t_sql_col_infos;
 
 /* Support Procedures */
 
@@ -232,6 +254,30 @@ AS
       g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || ', ' || col_rec.highlight_sql || ' AS HL_' || to_char(hl_num);
     END LOOP;
   END get_highlights;
+  
+  PROCEDURE process_row_highlights (p_fetched_row_cnt IN PLS_INTEGER)
+  AS
+    l_cur_col_name VARCHAR2(30);
+  BEGIN
+    l_cur_col_name := g_row_highlights.FIRST();
+    WHILE (l_cur_col_name IS NOT NULL) LOOP
+      dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_row_highlights(l_cur_col_name).col_num, g_cursor_info.num_tab );
+      FOR i IN 0 .. p_fetched_row_cnt - 1 LOOP
+        IF (g_cursor_info.num_tab(i + g_cursor_info.num_tab.FIRST()) IS NOT NULL) THEN
+          ax_xlsx_builder.set_row( p_row => g_current_row + i
+                                 , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                                                       , p_rgb => g_row_highlights(l_cur_col_name).font_color
+                                                                       )
+                                 , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                       , p_fgRGB => g_row_highlights(l_cur_col_name).bg_color
+                                                                       )
+                                 );
+        END IF;
+      END LOOP;
+      g_cursor_info.num_tab.DELETE;
+      l_cur_col_name := g_row_highlights.NEXT(l_cur_col_name);
+    END LOOP;
+  END process_row_highlights;
 
   PROCEDURE get_settings
   AS
@@ -264,6 +310,9 @@ AS
                           , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
                                                                 , p_fontsize => 14
                                                                 , p_bold => TRUE
+                                                                )
+                          , p_fillId => ax_xlsx_builder.get_fill( p_patterntype => 'solid'
+                                                                , p_fgRGB => 'FFF8DC'
                                                                 )
                           , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
@@ -335,13 +384,245 @@ AS
         l_cur_hl_name := g_col_highlights.next(l_cur_hl_name);
       END LOOP;
     END IF;
-    g_current_row := g_current_row + 1;
+    g_current_row := g_current_row + 1; --add additional row
   END print_header;
+
+  PROCEDURE prepare_cursor
+  AS
+    l_desc_tab dbms_sql.desc_tab2;
+    l_cur_col_highlight t_apex_ir_highlight;
+  BEGIN
+    -- Split sql query on first from and inject highlight conditions
+    g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM')) 
+                             || g_apex_ir_info.final_sql
+                             || SUBSTR(g_apex_ir_info.report_definition.sql_query, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
+
+    g_cursor_info.cursor_id := dbms_sql.open_cursor;
+    dbms_sql.parse( g_cursor_info.cursor_id, g_apex_ir_info.final_sql, dbms_sql.NATIVE );
+    dbms_sql.describe_columns2( g_cursor_info.cursor_id, g_cursor_info.column_count, l_desc_tab );
+    
+    /* Bind values from IR structure*/
+    FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP
+      dbms_sql.bind_variable( g_cursor_info.cursor_id, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
+    END LOOP;
+
+    /* Amend column settings*/    
+    FOR c IN 1 .. g_cursor_info.column_count LOOP
+      g_sql_columns(c).col_name := l_desc_tab(c).col_name;
+      CASE
+        WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
+          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.num_tab, c_bulk_size, 1 );
+          g_sql_columns(c).col_type := c_col_type_num;
+        WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
+          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.date_tab, c_bulk_size, 1 );
+          g_sql_columns(c).col_type := c_col_type_date;
+        WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
+          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.vc_tab, c_bulk_size, 1 );
+          g_sql_columns(c).col_type := c_col_type_vc;
+        ELSE
+          NULL;
+      END CASE;
+
+      IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
+        IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
+          g_xlsx_options.display_column_count := g_xlsx_options.display_column_count + 1; -- count number of displayed columns
+          g_sql_columns(c).is_displayed := TRUE;
+          g_col_settings(l_desc_tab(c).col_name).sql_col_num := c; -- column in SQL
+          g_col_settings(l_desc_tab(c).col_name).display_column := g_xlsx_options.display_column_count; -- column in spreadsheet
+        END IF;
+      ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
+        g_row_highlights(l_desc_tab(c).col_name).col_num := c;
+      ELSIF g_col_highlights.EXISTS(l_desc_tab(c).col_name) THEN
+        g_col_highlights(l_desc_tab(c).col_name).col_num := c;
+        l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
+        g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
+      END IF;
+      
+    END LOOP;  
+  END prepare_cursor;
+
+  PROCEDURE print_column_headers
+  AS
+  BEGIN
+    FOR c IN 1..g_cursor_info.column_count LOOP
+      IF g_sql_columns(c).is_displayed THEN
+        ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
+                            , p_row => g_current_row
+                            , p_value => g_col_settings(g_sql_columns(c).col_name).report_label
+                            , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                                                  , p_bold => TRUE
+                                                                  )
+                            , p_fillId => ax_xlsx_builder.get_fill( p_patterntype => 'solid'
+                                                                  , p_fgRGB => 'FFF8DC'
+                                                                  )
+                            , p_sheet => g_xlsx_options.sheet );
+      END IF;
+    END LOOP;
+    g_current_row := g_current_row + 1;
+  END print_column_headers;
+
+  FUNCTION process_col_highlights ( p_column_name IN VARCHAR2
+                                  , p_fetched_row_cnt IN PLS_INTEGER
+                                  )
+    RETURN t_apex_ir_active_hl
+  AS
+    l_cur_hl_name VARCHAR2(30);
+    l_cur_col_highlight t_apex_ir_highlight;
+    retval t_apex_ir_active_hl;
+  BEGIN
+    l_cur_hl_name := g_col_settings(p_column_name).highlight_conds.FIRST;
+    WHILE (l_cur_hl_name IS NOT NULL) LOOP
+      l_cur_col_highlight := g_col_settings(p_column_name).highlight_conds(l_cur_hl_name);
+      dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, l_cur_col_highlight.col_num, g_cursor_info.num_tab);
+      FOR i IN 0 .. p_fetched_row_cnt - 1 LOOP
+        -- highlight condition TRUE
+        IF g_cursor_info.num_tab(i + g_cursor_info.num_tab.FIRST()) IS NOT NULL THEN
+          -- no previous highlight condition matched
+          IF NOT retval.EXISTS(i) THEN
+            retval(i) := l_cur_col_highlight;
+          END IF;
+        END IF;
+      END LOOP;
+      g_cursor_info.num_tab.DELETE;
+      l_cur_hl_name := g_col_settings(p_column_name).highlight_conds.next(l_cur_hl_name);
+    END LOOP;
+    RETURN retval;
+  END process_col_highlights;
+
+  PROCEDURE print_num_column ( p_column_position IN PLS_INTEGER
+                             , p_fetched_row_cnt IN PLS_INTEGER
+                             , p_active_highlights IN t_apex_ir_active_hl
+                             )
+  AS
+  BEGIN
+    dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.num_tab );
+    FOR i IN 0 .. p_fetched_row_cnt - 1 loop
+      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+                          , p_row => g_current_row + i
+                          , p_value => g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
+                          , p_fontId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                                                    , p_rgb => p_active_highlights(i).font_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_fillId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                    , p_fgRGB => p_active_highlights(i).bg_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_sheet => g_xlsx_options.sheet );
+    END loop;
+    g_cursor_info.num_tab.DELETE;
+  END print_num_column;
+
+  PROCEDURE print_date_column ( p_column_position IN PLS_INTEGER
+                              , p_fetched_row_cnt IN PLS_INTEGER
+                              , p_active_highlights IN t_apex_ir_active_hl
+                              )
+  AS
+  BEGIN
+    dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.date_tab );
+    FOR i IN 0 .. p_fetched_row_cnt - 1 loop
+      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+                          , p_row => g_current_row + i
+                          , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
+                          , p_fontId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                                                    , p_rgb => p_active_highlights(i).font_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_fillId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                    , p_fgRGB => p_active_highlights(i).bg_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_sheet => g_xlsx_options.sheet );
+    END LOOP;
+    g_cursor_info.date_tab.DELETE;
+  END print_date_column;
   
+  PROCEDURE print_vc_column ( p_column_position IN PLS_INTEGER
+                            , p_fetched_row_cnt IN PLS_INTEGER
+                            , p_active_highlights IN t_apex_ir_active_hl
+                            )
+  AS
+  BEGIN
+    dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.vc_tab );
+    FOR i IN 0 .. p_fetched_row_cnt - 1 loop
+      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+                          , p_row => g_current_row + i
+                          , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
+                          , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
+                          , p_fontId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                                                    , p_rgb => p_active_highlights(i).font_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_fillId => CASE
+                                          WHEN p_active_highlights.EXISTS(i) THEN
+                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                    , p_fgRGB => p_active_highlights(i).bg_color
+                                                                    )
+                                          ELSE NULL
+                                        END
+                          , p_sheet => g_xlsx_options.sheet );
+    END LOOP;
+    g_cursor_info.vc_tab.DELETE;
+  END print_vc_column;
+
+  PROCEDURE print_data (p_fetched_row_cnt IN PLS_INTEGER)
+  AS
+    l_cur_col_name VARCHAR2(4000);
+    l_cur_col_highlight t_apex_ir_highlight;
+    l_active_col_highlights t_apex_ir_active_hl;  
+  BEGIN
+    FOR c IN 1..g_cursor_info.column_count LOOP
+      -- new column, clean highlights
+      l_active_col_highlights.DELETE;
+      IF g_sql_columns(c).is_displayed THEN
+        -- check if column has highlights attached
+        IF g_xlsx_options.process_highlights AND g_col_settings(g_sql_columns(c).col_name).highlight_conds.count() > 0 THEN
+          l_active_col_highlights := process_col_highlights( p_column_name => g_sql_columns(c).col_name
+                                                           , p_fetched_row_cnt => p_fetched_row_cnt
+                                                           );
+        END IF;
+        
+        -- now create the cells
+        CASE
+          WHEN g_sql_columns(c).col_type = c_col_type_num THEN
+            print_num_column( p_column_position => c
+                            , p_fetched_row_cnt => p_fetched_row_cnt
+                            , p_active_highlights => l_active_col_highlights
+                            );
+          WHEN g_sql_columns(c).col_type = c_col_type_date THEN
+            print_date_column( p_column_position => c
+                             , p_fetched_row_cnt => p_fetched_row_cnt
+                             , p_active_highlights => l_active_col_highlights
+                             );
+          WHEN g_sql_columns(c).col_type = c_col_type_vc THEN
+            print_vc_column( p_column_position => c
+                           , p_fetched_row_cnt => p_fetched_row_cnt
+                           , p_active_highlights => l_active_col_highlights
+                           );
+          ELSE NULL; -- unsupported data type
+        END CASE;
+      END IF;
+    END LOOP;  
+  END print_data;
   
 /* Main Function */
 
-  FUNCTION query2sheet_apex
+  FUNCTION apexir2sheet
     ( p_ir_region_id NUMBER
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
@@ -355,18 +636,7 @@ AS
     )
   RETURN BLOB
   AS
-    l_cursor integer;
-    l_col_cnt integer;
-    l_desc_tab dbms_sql.desc_tab2;
-    l_date_tab dbms_sql.date_table;
-    l_num_tab dbms_sql.number_table;
-    l_vc_tab dbms_sql.varchar2_table;
-    l_hl_tab dbms_sql.number_table;
-    t_r INTEGER;
-    l_cur_col_name VARCHAR2(4000);
-    l_num_val NUMBER;
-    l_cur_col_highlight t_apex_ir_highlight;
-    l_active_col_highlights t_apex_ir_active_hl;
+    l_fetched_row_cnt INTEGER;
   BEGIN
     -- IR infos
     g_apex_ir_info.application_id := p_app_id;
@@ -389,212 +659,43 @@ AS
 
     -- retrieve IR infos
     get_settings();
-
-    -- Split sql query on first from and inject highlight conditions
-    g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM')) 
-                             || g_apex_ir_info.final_sql
-                             || SUBSTR(g_apex_ir_info.report_definition.sql_query, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
-    
-    l_cursor := dbms_sql.open_cursor;
-    dbms_sql.parse( l_cursor, g_apex_ir_info.final_sql, dbms_sql.NATIVE );
-    dbms_sql.describe_columns2( l_cursor, l_col_cnt, l_desc_tab );
-    
-    /* Bind values from IR structure*/
-    FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP
-      dbms_sql.bind_variable( l_cursor, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
-    END LOOP;
-
-    /* Amend column settings and create header row */    
-    FOR c IN 1 .. l_col_cnt LOOP
-      IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
-        IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
-          g_xlsx_options.display_column_count := g_xlsx_options.display_column_count + 1; -- count number of displayed columns
-          g_col_settings(l_desc_tab(c).col_name).sql_col_num := c; -- column in SQL
-          g_col_settings(l_desc_tab(c).col_name).display_column := g_xlsx_options.display_column_count; -- column in spreadsheet
-        END IF;
-      ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
-        g_row_highlights(l_desc_tab(c).col_name).col_num := c;
-      ELSIF g_col_highlights.EXISTS(l_desc_tab(c).col_name) THEN
-        g_col_highlights(l_desc_tab(c).col_name).col_num := c;
-        l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
-        g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
-      END IF;
-      
-      CASE
-        WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
-          dbms_sql.define_array( l_cursor, c, l_num_tab, c_bulk_size, 1 );
-        WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
-          dbms_sql.define_array( l_cursor, c, l_date_tab, c_bulk_size, 1 );
-        WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
-          dbms_sql.define_array( l_cursor, c, l_vc_tab, c_bulk_size, 1 );
-        ELSE
-          NULL;
-      END CASE;
-    END LOOP;
+    -- construct full SQL and prepare cursor    
+    prepare_cursor();
     
     IF g_xlsx_options.show_title OR g_xlsx_options.show_filters OR g_xlsx_options.show_highlights THEN
       print_header;
     END IF;
     
     IF g_xlsx_options.show_column_headers THEN
-      FOR c IN 1..l_col_cnt LOOP
-        IF g_col_settings.EXISTS(l_desc_tab(c).col_name)
-       AND g_col_settings(l_desc_tab(c).col_name).is_visible THEN
-          ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                              , p_row => g_current_row
-                              , p_value => g_col_settings(l_desc_tab(c).col_name).report_label
-                              , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                    , p_bold => TRUE
-                                                                    )
-                              , p_sheet => g_xlsx_options.sheet );
-        END IF;
-      END LOOP;
-      g_current_row := g_current_row + 1;
+      print_column_headers;
     END IF;
 
     -- Start looping through the "real" data
-    t_r := dbms_sql.execute( l_cursor );
-    loop
-      t_r := dbms_sql.fetch_rows( l_cursor );
-      IF t_r > 0 THEN
-        -- first run through row highlights
-        l_cur_col_name := g_row_highlights.FIRST();
-        WHILE (l_cur_col_name IS NOT NULL) LOOP
-          dbms_sql.COLUMN_VALUE( l_cursor, g_row_highlights(l_cur_col_name).col_num, l_num_tab );
-          FOR i IN 0 .. t_r - 1 LOOP
-            IF (l_num_tab(i + l_num_tab.FIRST()) IS NOT NULL) THEN
-              ax_xlsx_builder.set_row( p_row => g_current_row + i
-                                     , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                           , p_rgb => g_row_highlights(l_cur_col_name).font_color
-                                                                           )
-                                     , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                           , p_fgRGB => g_row_highlights(l_cur_col_name).bg_color
-                                                                           )
-                                     );
-            END IF;
-          END LOOP;
-          l_num_tab.DELETE;
-          l_cur_col_name := g_row_highlights.NEXT(l_cur_col_name);
-        END LOOP;
-        -- run through displayed columns
-        FOR c IN 1..l_col_cnt LOOP
-          -- new column, clean highlights
-          l_active_col_highlights.delete;
-          IF g_col_settings.EXISTS(l_desc_tab(c).col_name) THEN
-            IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
-              -- check if column has highlights attached
-              IF g_col_settings(l_desc_tab(c).col_name).highlight_conds.count() > 0 THEN
-                l_cur_col_name := g_col_settings(l_desc_tab(c).col_name).highlight_conds.FIRST;
-                WHILE (l_cur_col_name IS NOT NULL) LOOP
-                  l_cur_col_highlight := g_col_settings(l_desc_tab(c).col_name).highlight_conds(l_cur_col_name);
-                  dbms_sql.COLUMN_VALUE( l_cursor, l_cur_col_highlight.col_num, l_num_tab);
-                  FOR i IN 0 .. t_r - 1 LOOP
-                    -- highlight condition TRUE
-                    IF l_num_tab(i + l_num_tab.FIRST()) IS NOT NULL THEN
-                      -- no previous highlight condition matched
-                      IF NOT l_active_col_highlights.EXISTS(i) THEN
-                        l_active_col_highlights(i) := l_cur_col_highlight;
-                      END IF;
-                    END IF;
-                  END LOOP;
-                  -- next record, clean up array and get next index, !don't forget this ever!
-                  l_num_tab.delete;
-                  l_cur_col_name := g_col_settings(l_desc_tab(c).col_name).highlight_conds.next(l_cur_col_name);
-                END LOOP;
-              END IF;
-              
-              -- now create the cells
-              CASE
-                WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
-                  dbms_sql.COLUMN_VALUE( l_cursor, c, l_num_tab );
-                  FOR i IN 0 .. t_r - 1 loop
-                    IF l_active_col_highlights.EXISTS(i) THEN
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_num_tab( i + l_num_tab.FIRST() )
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                                , p_rgb => l_active_col_highlights(i).font_color
-                                                                                )
-                                          , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                                , p_fgRGB => l_active_col_highlights(i).bg_color
-                                                                                )
-                                          , p_sheet => g_xlsx_options.sheet );
-                    ELSE
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_num_tab( i + l_num_tab.FIRST() )
-                                          , p_sheet => g_xlsx_options.sheet );
-                    END IF;
-                  END loop;
-                  l_num_tab.DELETE;
-                WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
-                  dbms_sql.column_value( l_cursor, c, l_date_tab );
-                  FOR i IN 0 .. t_r - 1 loop
-                    IF l_active_col_highlights.EXISTS(i) THEN
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_date_tab( i + l_date_tab.FIRST() )
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                                , p_rgb => l_active_col_highlights(i).font_color
-                                                                                )
-                                          , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                                , p_fgRGB => l_active_col_highlights(i).bg_color
-                                                                                )
-                                          , p_sheet => g_xlsx_options.sheet );
-                    ELSE
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_date_tab( i + l_date_tab.FIRST() )
-                                          , p_sheet => g_xlsx_options.sheet );
-                    END IF;
-                  END loop;
-                  l_date_tab.delete;
-                WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
-                  dbms_sql.column_value( l_cursor, c, l_vc_tab );
-                  FOR i IN 0 .. t_r - 1 loop
-                    IF l_active_col_highlights.EXISTS(i) THEN
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_vc_tab( i + l_vc_tab.FIRST() )
-                                          , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
-                                          , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                                , p_rgb => l_active_col_highlights(i).font_color
-                                                                                )
-                                          , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                                , p_fgRGB => l_active_col_highlights(i).bg_color
-                                                                                )
-                                          , p_sheet => g_xlsx_options.sheet );
-                    ELSE
-                      ax_xlsx_builder.cell( p_col => g_col_settings(l_desc_tab(c).col_name).display_column
-                                          , p_row => g_current_row + i
-                                          , p_value => l_vc_tab( i + l_vc_tab.FIRST() )
-                                          , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
-                                          , p_sheet => g_xlsx_options.sheet );
-                    END IF;
-                  END loop;
-                  l_vc_tab.delete;
-                else
-                  NULL;
-              END CASE;
-            END IF;
-          END IF;
-        END LOOP;
-      end if;
-      exit when t_r != c_bulk_size;
-      g_current_row := g_current_row + t_r;
-    end loop;
-    dbms_sql.close_cursor( l_cursor );
-    RETURN ax_xlsx_builder.finish;
-  exception
-    when others
-    then
-      if dbms_sql.is_open( l_cursor )
-      then
-        dbms_sql.close_cursor( l_cursor );
+    l_fetched_row_cnt := dbms_sql.execute( g_cursor_info.cursor_id );
+    LOOP
+      l_fetched_row_cnt := dbms_sql.fetch_rows( g_cursor_info.cursor_id );
+      IF l_fetched_row_cnt > 0 THEN
+        -- first run through row highlights if enabld
+        IF g_xlsx_options.process_highlights THEN
+          process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt);
+        END IF;
+        
+        -- run through displayed columns        
+        print_data(p_fetched_row_cnt => l_fetched_row_cnt);
       END IF;
-      raise;
+      EXIT WHEN l_fetched_row_cnt != c_bulk_size;
+      g_current_row := g_current_row + l_fetched_row_cnt;
+    END LOOP;
+    dbms_sql.close_cursor( g_cursor_info.cursor_id );
+    RETURN ax_xlsx_builder.finish;
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
+        dbms_sql.close_cursor( g_cursor_info.cursor_id );
+      END IF;
+      RAISE;
       RETURN NULL;
-  END query2sheet_apex;
+  END apexir2sheet;
 
 END MK_APEX_IR_XLSX;
 

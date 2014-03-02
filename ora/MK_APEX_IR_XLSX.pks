@@ -9,7 +9,7 @@ AS
       - Header rows for report title and settings
   */
 
-  FUNCTION query2sheet_apex
+  FUNCTION apexir2sheet
     ( p_ir_region_id NUMBER
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
