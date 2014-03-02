@@ -4,9 +4,10 @@ AS
 
   /* Feature Set:
       - Highlights for rows and columns
+      - Header rows for title and highlights
       
     TODO:
-      - Header rows for report title and settings
+      - Header rows for filters
   */
 
   FUNCTION apexir2sheet

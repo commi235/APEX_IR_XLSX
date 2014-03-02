@@ -323,6 +323,7 @@ AS
     END IF;
     IF g_xlsx_options.show_filters THEN
       -- TODO Implementation required
+      -- find way to select filters...
       NULL;
 /*    
       ax_xlsx_builder.mergecells( p_tl_col => 1
