@@ -207,7 +207,7 @@ THE SOFTWARE.
   function get_font
     ( p_name varchar2
     , p_family pls_integer := 2
-    , p_fontsize number := 10
+    , p_fontsize number := 8
     , p_theme pls_integer := 1
     , p_underline boolean := false
     , p_italic boolean := false
