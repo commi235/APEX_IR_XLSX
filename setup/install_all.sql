@@ -1,3 +1,4 @@
+@@../ora/apexir_xlsx_types_pkg.pks
 @@../ora/xlsx_builder_pkg.pks
 @@../ora/xlsx_builder_pkg.pkb
 @@../ora/mk_apex_ir_xlsx.pks

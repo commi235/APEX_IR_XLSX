@@ -3,97 +3,27 @@ AS
 
 /* Constants */
   c_bulk_size CONSTANT pls_integer := 200;
-  c_col_type_vc CONSTANT VARCHAR2(30) := 'VARCHAR';
-  c_col_type_num CONSTANT VARCHAR2(30) := 'NUMBER';
-  c_col_type_date CONSTANT VARCHAR2(30) := 'DATE';
+  
+  c_col_data_type_vc CONSTANT VARCHAR2(30) := 'VARCHAR';
+  c_col_data_type_num CONSTANT VARCHAR2(30) := 'NUMBER';
+  c_col_data_type_date CONSTANT VARCHAR2(30) := 'DATE';
+  
+  c_display_column CONSTANT VARCHAR2(30) := 'DISPLAY';
+  c_row_highlight CONSTANT VARCHAR2(30) := 'ROW_HIGHLIGHT';
+  c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLICHT';
+  
 
-/* TYPE Definitions */  
-  TYPE t_apex_ir_highlight IS RECORD
-    ( bg_color apex_application_page_ir_cond.highlight_row_color%TYPE
-    , font_color apex_application_page_ir_cond.highlight_row_font_color%TYPE
-    , highlight_name apex_application_page_ir_cond.condition_name%TYPE
-    , highlight_sql apex_application_page_ir_cond.condition_sql%TYPE
-    , col_num NUMBER -- defines which SQL column to check
-    , affected_column VARCHAR2(30)
-    )
-  ;
-  
-  TYPE t_apex_ir_highlights IS TABLE OF t_apex_ir_highlight INDEX BY VARCHAR2(30);
-  TYPE t_apex_ir_active_hl IS TABLE OF t_apex_ir_highlight INDEX BY PLS_INTEGER;
-
-  -- Types to hold run-time information
-  TYPE t_apex_ir_col IS RECORD
-    ( report_label apex_application_page_ir_col.report_label%TYPE
-    , is_visible BOOLEAN
-    , is_break_col BOOLEAN
-    , sum_on_break BOOLEAN
-    , avg_on_break BOOLEAN
-    , max_on_break BOOLEAN
-    , min_on_break BOOLEAN
-    , median_on_break BOOLEAN
-    , count_on_break BOOLEAN
-    , count_distinct_on_break BOOLEAN
-    , highlight_conds t_apex_ir_highlights
-    , sql_col_num NUMBER -- defines which SQL column to check
-    , display_column PLS_INTEGER
-    )
-  ;
-  
-  TYPE t_apex_ir_cols IS TABLE OF t_apex_ir_col INDEX BY VARCHAR2(30);
-
-  TYPE t_apex_ir_info IS RECORD
-    ( application_id NUMBER -- Application ID IR belongs to
-    , page_id NUMBER -- Page ID IR belongs to
-    , region_id NUMBER -- Region ID of IR Region
-    , session_id NUMBER -- Session ID for Request
-    , base_report_id NUMBER -- Report ID for Request
-    , report_title VARCHAR2(4000) -- Derived Report Title
-    , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
-    , final_sql VARCHAR2(32767)
-    )
-  ;
-
-  TYPE t_xlsx_options IS RECORD
-    ( show_title BOOLEAN -- Show header line with report title
-    , show_filters BOOLEAN -- show header lines with filter settings
-    , show_column_headers BOOLEAN -- show column headers before data
-    , process_highlights BOOLEAN -- format data according to highlights
-    , show_highlights BOOLEAN -- show header lines with highlight settings, not useful if set without above
-    , show_aggregates BOOLEAN -- process aggregates and show on total lines
-    , display_column_count NUMBER -- holds the count of displayed columns, used for merged cells in header section
-    , sheet PLS_INTEGER -- holds the worksheet reference
-    , default_font VARCHAR2(100)
-    , default_border_color VARCHAR2(100)
-    )
-  ;
-  
-  TYPE t_sql_col_info IS RECORD
-    ( col_name VARCHAR2(32767)
-    , col_type VARCHAR2(30)
-    , is_displayed BOOLEAN := FALSE -- assume no display, we loop through all and flag displayed then
-    );
-  
-  TYPE t_sql_col_infos IS TABLE OF t_sql_col_info INDEX BY PLS_INTEGER;
-  
-  TYPE t_cursor_info IS RECORD
-    ( cursor_id PLS_INTEGER
-    , column_count PLS_INTEGER
-    , date_tab dbms_sql.date_table
-    , num_tab dbms_sql.number_table
-    , vc_tab dbms_sql.varchar2_table
-    );
-  
 /* Global Variables */
  
   -- runtime data
-  g_apex_ir_info t_apex_ir_info;
-  g_xlsx_options t_xlsx_options;
-  g_col_settings t_apex_ir_cols;
-  g_row_highlights t_apex_ir_highlights;
-  g_col_highlights t_apex_ir_highlights;
+  g_apex_ir_info apexir_xlsx_types_pkg.t_apex_ir_info;
+  g_xlsx_options apexir_xlsx_types_pkg.t_xlsx_options;
+  g_col_settings apexir_xlsx_types_pkg.t_apex_ir_cols;
+  g_row_highlights apexir_xlsx_types_pkg.t_apex_ir_highlights;
+  g_col_highlights apexir_xlsx_types_pkg.t_apex_ir_highlights;
   g_current_row PLS_INTEGER := 1;
-  g_cursor_info t_cursor_info;
-  g_sql_columns t_sql_col_infos;
+  g_cursor_info apexir_xlsx_types_pkg.t_cursor_info;
+  g_sql_columns apexir_xlsx_types_pkg.t_sql_col_infos;
 
 /* Support Procedures */
 
@@ -120,7 +50,7 @@ AS
 
   PROCEDURE get_std_columns
   AS
-    col_rec t_apex_ir_col;
+    col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
   BEGIN
     -- These column names are static defined, used as reference
     FOR rec IN ( SELECT column_alias, report_label, display_text_as
@@ -138,7 +68,7 @@ AS
 
   PROCEDURE get_computations
   AS
-    col_rec  t_apex_ir_col;
+    col_rec  apexir_xlsx_types_pkg.t_apex_ir_col;
   BEGIN
     -- computations are run-time data, therefore need base report ID and session
     FOR rec IN (SELECT computation_column_alias,computation_report_label
@@ -210,7 +140,7 @@ AS
 
   PROCEDURE get_highlights
   AS
-    col_rec t_apex_ir_highlight;
+    col_rec apexir_xlsx_types_pkg.t_apex_ir_highlight;
     hl_num NUMBER := 0;
   BEGIN
     FOR rec IN (SELECT CASE
@@ -391,7 +321,7 @@ AS
   PROCEDURE prepare_cursor
   AS
     l_desc_tab dbms_sql.desc_tab2;
-    l_cur_col_highlight t_apex_ir_highlight;
+    l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
   BEGIN
     -- Split sql query on first from and inject highlight conditions
     g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM')) 
@@ -413,13 +343,13 @@ AS
       CASE
         WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
           dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.num_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_type := c_col_type_num;
+          g_sql_columns(c).col_data_type := c_col_data_type_num;
         WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
           dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.date_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_type := c_col_type_date;
+          g_sql_columns(c).col_data_type := c_col_data_type_date;
         WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96, 112 ) THEN
           dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.vc_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_type := c_col_type_vc;
+          g_sql_columns(c).col_data_type := c_col_data_type_vc;
         ELSE
           NULL;
       END CASE;
@@ -428,13 +358,16 @@ AS
         IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
           g_xlsx_options.display_column_count := g_xlsx_options.display_column_count + 1; -- count number of displayed columns
           g_sql_columns(c).is_displayed := TRUE;
+          g_sql_columns(c).col_type := c_display_column;
           g_col_settings(l_desc_tab(c).col_name).sql_col_num := c; -- column in SQL
           g_col_settings(l_desc_tab(c).col_name).display_column := g_xlsx_options.display_column_count; -- column in spreadsheet
         END IF;
       ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
         g_row_highlights(l_desc_tab(c).col_name).col_num := c;
+        g_sql_columns(c).col_type := c_row_highlight;
       ELSIF g_col_highlights.EXISTS(l_desc_tab(c).col_name) THEN
         g_col_highlights(l_desc_tab(c).col_name).col_num := c;
+        g_sql_columns(c).col_type := c_column_highlight;
         l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
         g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
       END IF;
@@ -465,11 +398,11 @@ AS
   FUNCTION process_col_highlights ( p_column_name IN VARCHAR2
                                   , p_fetched_row_cnt IN PLS_INTEGER
                                   )
-    RETURN t_apex_ir_active_hl
+    RETURN apexir_xlsx_types_pkg.t_apex_ir_active_hl
   AS
     l_cur_hl_name VARCHAR2(30);
-    l_cur_col_highlight t_apex_ir_highlight;
-    retval t_apex_ir_active_hl;
+    l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
+    retval apexir_xlsx_types_pkg.t_apex_ir_active_hl;
   BEGIN
     l_cur_hl_name := g_col_settings(p_column_name).highlight_conds.FIRST;
     WHILE (l_cur_hl_name IS NOT NULL) LOOP
@@ -492,7 +425,7 @@ AS
 
   PROCEDURE print_num_column ( p_column_position IN PLS_INTEGER
                              , p_fetched_row_cnt IN PLS_INTEGER
-                             , p_active_highlights IN t_apex_ir_active_hl
+                             , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
                              )
   AS
   BEGIN
@@ -522,7 +455,7 @@ AS
 
   PROCEDURE print_date_column ( p_column_position IN PLS_INTEGER
                               , p_fetched_row_cnt IN PLS_INTEGER
-                              , p_active_highlights IN t_apex_ir_active_hl
+                              , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
                               )
   AS
   BEGIN
@@ -552,7 +485,7 @@ AS
   
   PROCEDURE print_vc_column ( p_column_position IN PLS_INTEGER
                             , p_fetched_row_cnt IN PLS_INTEGER
-                            , p_active_highlights IN t_apex_ir_active_hl
+                            , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
                             )
   AS
   BEGIN
@@ -584,8 +517,8 @@ AS
   PROCEDURE print_data (p_fetched_row_cnt IN PLS_INTEGER)
   AS
     l_cur_col_name VARCHAR2(4000);
-    l_cur_col_highlight t_apex_ir_highlight;
-    l_active_col_highlights t_apex_ir_active_hl;  
+    l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
+    l_active_col_highlights apexir_xlsx_types_pkg.t_apex_ir_active_hl;  
   BEGIN
     FOR c IN 1..g_cursor_info.column_count LOOP
       -- new column, clean highlights
@@ -600,17 +533,17 @@ AS
         
         -- now create the cells
         CASE
-          WHEN g_sql_columns(c).col_type = c_col_type_num THEN
+          WHEN g_sql_columns(c).col_type = c_col_data_type_num THEN
             print_num_column( p_column_position => c
                             , p_fetched_row_cnt => p_fetched_row_cnt
                             , p_active_highlights => l_active_col_highlights
                             );
-          WHEN g_sql_columns(c).col_type = c_col_type_date THEN
+          WHEN g_sql_columns(c).col_type = c_col_data_type_date THEN
             print_date_column( p_column_position => c
                              , p_fetched_row_cnt => p_fetched_row_cnt
                              , p_active_highlights => l_active_col_highlights
                              );
-          WHEN g_sql_columns(c).col_type = c_col_type_vc THEN
+          WHEN g_sql_columns(c).col_type = c_col_data_type_vc THEN
             print_vc_column( p_column_position => c
                            , p_fetched_row_cnt => p_fetched_row_cnt
                            , p_active_highlights => l_active_col_highlights
