@@ -533,17 +533,17 @@ AS
         
         -- now create the cells
         CASE
-          WHEN g_sql_columns(c).col_type = c_col_data_type_num THEN
+          WHEN g_sql_columns(c).col_data_type = c_col_data_type_num THEN
             print_num_column( p_column_position => c
                             , p_fetched_row_cnt => p_fetched_row_cnt
                             , p_active_highlights => l_active_col_highlights
                             );
-          WHEN g_sql_columns(c).col_type = c_col_data_type_date THEN
+          WHEN g_sql_columns(c).col_data_type = c_col_data_type_date THEN
             print_date_column( p_column_position => c
                              , p_fetched_row_cnt => p_fetched_row_cnt
                              , p_active_highlights => l_active_col_highlights
                              );
-          WHEN g_sql_columns(c).col_type = c_col_data_type_vc THEN
+          WHEN g_sql_columns(c).col_data_type = c_col_data_type_vc THEN
             print_vc_column( p_column_position => c
                            , p_fetched_row_cnt => p_fetched_row_cnt
                            , p_active_highlights => l_active_col_highlights
@@ -613,7 +613,6 @@ AS
         IF g_xlsx_options.process_highlights THEN
           process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt);
         END IF;
-        
         -- run through displayed columns        
         print_data(p_fetched_row_cnt => l_fetched_row_cnt);
       END IF;
