@@ -187,25 +187,25 @@ AS
   
   PROCEDURE process_row_highlights (p_fetched_row_cnt IN PLS_INTEGER)
   AS
-    l_cur_col_name VARCHAR2(30);
+    l_cur_highlight VARCHAR2(30);
   BEGIN
-    l_cur_col_name := g_row_highlights.FIRST();
-    WHILE (l_cur_col_name IS NOT NULL) LOOP
-      dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_row_highlights(l_cur_col_name).col_num, g_cursor_info.num_tab );
+    l_cur_highlight := g_row_highlights.FIRST();
+    WHILE l_cur_highlight IS NOT NULL LOOP
+      dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_row_highlights(l_cur_highlight).col_num, g_cursor_info.num_tab );
       FOR i IN 0 .. p_fetched_row_cnt - 1 LOOP
         IF (g_cursor_info.num_tab(i + g_cursor_info.num_tab.FIRST()) IS NOT NULL) THEN
           ax_xlsx_builder.set_row( p_row => g_current_row + i
                                  , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
-                                                                       , p_rgb => g_row_highlights(l_cur_col_name).font_color
+                                                                       , p_rgb => g_row_highlights(l_cur_highlight).font_color
                                                                        )
                                  , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                       , p_fgRGB => g_row_highlights(l_cur_col_name).bg_color
+                                                                       , p_fgRGB => g_row_highlights(l_cur_highlight).bg_color
                                                                        )
                                  );
         END IF;
       END LOOP;
       g_cursor_info.num_tab.DELETE;
-      l_cur_col_name := g_row_highlights.NEXT(l_cur_col_name);
+      l_cur_highlight := g_row_highlights.next(l_cur_highlight);
     END LOOP;
   END process_row_highlights;
 
@@ -514,44 +514,57 @@ AS
     g_cursor_info.vc_tab.DELETE;
   END print_vc_column;
 
-  PROCEDURE print_data (p_fetched_row_cnt IN PLS_INTEGER)
+  PROCEDURE print_data
   AS
     l_cur_col_name VARCHAR2(4000);
+    l_fetched_row_cnt PLS_INTEGER;
     l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
     l_active_col_highlights apexir_xlsx_types_pkg.t_apex_ir_active_hl;  
   BEGIN
-    FOR c IN 1..g_cursor_info.column_count LOOP
-      -- new column, clean highlights
-      l_active_col_highlights.DELETE;
-      IF g_sql_columns(c).is_displayed THEN
-        -- check if column has highlights attached
-        IF g_xlsx_options.process_highlights AND g_col_settings(g_sql_columns(c).col_name).highlight_conds.count() > 0 THEN
-          l_active_col_highlights := process_col_highlights( p_column_name => g_sql_columns(c).col_name
-                                                           , p_fetched_row_cnt => p_fetched_row_cnt
-                                                           );
-        END IF;
-        
-        -- now create the cells
-        CASE
-          WHEN g_sql_columns(c).col_data_type = c_col_data_type_num THEN
-            print_num_column( p_column_position => c
-                            , p_fetched_row_cnt => p_fetched_row_cnt
-                            , p_active_highlights => l_active_col_highlights
-                            );
-          WHEN g_sql_columns(c).col_data_type = c_col_data_type_date THEN
-            print_date_column( p_column_position => c
-                             , p_fetched_row_cnt => p_fetched_row_cnt
-                             , p_active_highlights => l_active_col_highlights
-                             );
-          WHEN g_sql_columns(c).col_data_type = c_col_data_type_vc THEN
-            print_vc_column( p_column_position => c
-                           , p_fetched_row_cnt => p_fetched_row_cnt
-                           , p_active_highlights => l_active_col_highlights
-                           );
-          ELSE NULL; -- unsupported data type
-        END CASE;
+    l_fetched_row_cnt := dbms_sql.execute( g_cursor_info.cursor_id );
+    LOOP
+      l_fetched_row_cnt := dbms_sql.fetch_rows( g_cursor_info.cursor_id );
+      IF l_fetched_row_cnt > 0 THEN
+        process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt );
+        FOR c IN 1..g_cursor_info.column_count LOOP
+          IF g_sql_columns(c).is_displayed THEN
+            -- next display column, empty active highlights
+            l_active_col_highlights.DELETE;
+            -- check if highlight processing is enabled and column has highlights attached
+            IF g_xlsx_options.process_highlights AND
+               g_col_settings(g_sql_columns(c).col_name).highlight_conds.count() > 0
+            THEN
+              l_active_col_highlights := process_col_highlights( p_column_name => g_sql_columns(c).col_name
+                                                               , p_fetched_row_cnt => l_fetched_row_cnt
+                                                               );
+            END IF;
+            
+            -- now create the cells
+            CASE
+              WHEN g_sql_columns(c).col_data_type = c_col_data_type_num THEN
+                print_num_column( p_column_position => c
+                                , p_fetched_row_cnt => l_fetched_row_cnt
+                                , p_active_highlights => l_active_col_highlights
+                                );
+              WHEN g_sql_columns(c).col_data_type = c_col_data_type_date THEN
+                print_date_column( p_column_position => c
+                                 , p_fetched_row_cnt => l_fetched_row_cnt
+                                 , p_active_highlights => l_active_col_highlights
+                                 );
+              WHEN g_sql_columns(c).col_data_type = c_col_data_type_vc THEN
+                print_vc_column( p_column_position => c
+                               , p_fetched_row_cnt => l_fetched_row_cnt
+                               , p_active_highlights => l_active_col_highlights
+                               );
+              ELSE NULL; -- unsupported data type
+            END CASE;
+          END IF;
+        END LOOP;  
       END IF;
-    END LOOP;  
+      EXIT WHEN l_fetched_row_cnt != c_bulk_size;
+      g_current_row := g_current_row + l_fetched_row_cnt;
+    END LOOP;
+    dbms_sql.close_cursor( g_cursor_info.cursor_id );
   END print_data;
   
 /* Main Function */
@@ -570,7 +583,6 @@ AS
     )
   RETURN BLOB
   AS
-    l_fetched_row_cnt INTEGER;
   BEGIN
     -- IR infos
     g_apex_ir_info.application_id := p_app_id;
@@ -589,6 +601,7 @@ AS
     g_xlsx_options.show_column_headers := p_column_headers;
     g_xlsx_options.display_column_count := 0; -- shift result set to right if > 0
     g_xlsx_options.default_font := 'Arial';
+    g_xlsx_options.default_border_color := 'b0a070'; -- not yet implemented...
     g_xlsx_options.sheet := ax_xlsx_builder.new_sheet; -- needed before running any ax_xlsx_builder commands
 
     -- retrieve IR infos
@@ -596,30 +609,20 @@ AS
     -- construct full SQL and prepare cursor    
     prepare_cursor();
     
+    -- print header if any header option is enabled
     IF g_xlsx_options.show_title OR g_xlsx_options.show_filters OR g_xlsx_options.show_highlights THEN
       print_header;
     END IF;
     
+    -- print column headings if enabled
     IF g_xlsx_options.show_column_headers THEN
       print_column_headers;
     END IF;
 
-    -- Start looping through the "real" data
-    l_fetched_row_cnt := dbms_sql.execute( g_cursor_info.cursor_id );
-    LOOP
-      l_fetched_row_cnt := dbms_sql.fetch_rows( g_cursor_info.cursor_id );
-      IF l_fetched_row_cnt > 0 THEN
-        -- first run through row highlights if enabld
-        IF g_xlsx_options.process_highlights THEN
-          process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt);
-        END IF;
-        -- run through displayed columns        
-        print_data(p_fetched_row_cnt => l_fetched_row_cnt);
-      END IF;
-      EXIT WHEN l_fetched_row_cnt != c_bulk_size;
-      g_current_row := g_current_row + l_fetched_row_cnt;
-    END LOOP;
-    dbms_sql.close_cursor( g_cursor_info.cursor_id );
+    -- Generate the "real" data
+    print_data;
+    
+    -- return the generated spreadsheet
     RETURN ax_xlsx_builder.finish;
   EXCEPTION
     WHEN OTHERS THEN
