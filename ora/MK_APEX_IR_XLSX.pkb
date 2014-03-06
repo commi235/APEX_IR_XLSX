@@ -223,6 +223,84 @@ AS
     END IF;
   END get_settings;
 
+  PROCEDURE print_filter_header
+  AS
+    l_condition_display VARCHAR2(400);
+  BEGIN
+    FOR rec IN (SELECT condition_type,
+                       cond.condition_name,
+                       condition_column_name,
+                       cond.condition_operator,
+                       cond.condition_expression,
+                       cond.condition_expression2,
+                       cond.condition_display,
+                       r.base_report_id, r.report_id
+                  FROM apex_application_page_ir_cond cond JOIN apex_application_page_ir_rpt r
+                         ON r.application_id = cond.application_id
+                        AND r.page_id = cond.page_id
+                        AND r.report_id = cond.report_id
+                 WHERE cond.application_id = 110
+                   AND cond.page_id = 4
+                   AND cond.condition_type IN ('Search', 'Filter')
+                   AND cond.condition_enabled = 'Yes'
+                )
+    LOOP
+      IF rec.condition_type = 'Search' OR
+         (rec.condition_type = 'Filter' AND rec.condition_column_name IS NULL)
+      THEN
+        l_condition_display := rec.condition_name;
+      ELSE
+        l_condition_display := REPLACE( rec.condition_display,'#APXWS_COL_NAME#'
+                                      , g_col_settings(rec.condition_column_name).report_label
+                                      );
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_OP_NAME#', rec.condition_operator);
+        --l_condition_display := replace(l_condition_display, '#APXWS_AND#', APEX_IR_HTML_EXCEL.apex_lang_message('APEXIR_AND','and'));
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR#', rec.condition_expression);
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NAME#', rec.condition_expression);
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NUMBER#', rec.condition_expression);
+        l_condition_display := replace(l_condition_display, '#APXWS_EXPR_DATE#', rec.condition_expression);
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NUMBER#', rec.condition_expression2);
+        l_condition_display := replace(l_condition_display, '#APXWS_EXPR2_DATE#', rec.condition_expression2);
+      END IF;
+      ax_xlsx_builder.mergecells( p_tl_col => 1
+                          , p_tl_row => g_current_row
+                          , p_br_col => g_xlsx_options.display_column_count
+                          , p_br_row => g_current_row
+                          , p_sheet => g_xlsx_options.sheet
+                          );
+      ax_xlsx_builder.cell( p_col => 1
+                          , p_row => g_current_row
+                          , p_value => l_condition_display
+                          , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                , p_fgRGB => 'FFF8DC'
+                                                                )
+                          , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                                                                        , p_horizontal => 'center'
+                                                                        )
+                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                          , p_sheet => g_xlsx_options.sheet );
+      FOR i IN 2..g_xlsx_options.display_column_count
+      LOOP
+      /* strange fix for borders... */
+        ax_xlsx_builder.cell( p_col => i
+                            , p_row => g_current_row
+                            , p_value => to_char(NULL)
+                            , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                                                  , p_fgRGB => 'FFF8DC'
+                                                                  )
+                           , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                                                                          , p_horizontal => 'center'
+                                                                          )
+                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                            , p_sheet => g_xlsx_options.sheet
+                            );
+     END LOOP;
+      g_current_row := g_current_row + 1;
+    END LOOP;
+  END print_filter_header;
+
   PROCEDURE print_header
   AS
     l_cur_hl_name VARCHAR2(30);
@@ -247,23 +325,13 @@ AS
                           , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
+                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet
                           );
       g_current_row := g_current_row + 1;
     END IF;
     IF g_xlsx_options.show_filters THEN
-      -- TODO Implementation required
-      -- find way to select filters...
-      NULL;
-/*    
-      ax_xlsx_builder.mergecells( p_tl_col => 1
-                                , p_tl_row => g_current_row
-                                , p_br_col => g_xlsx_options.display_column_count
-                                , p_br_row => g_current_row
-                                , p_sheet => g_xlsx_options.sheet
-                                );
-      g_current_row := g_current_row + 1;
-*/
+      print_filter_header;
     END IF;
     IF g_xlsx_options.show_highlights THEN
       l_cur_hl_name := g_row_highlights.FIRST();
@@ -286,6 +354,7 @@ AS
                             , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
+                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
         g_current_row := g_current_row + 1;
         l_cur_hl_name := g_row_highlights.next(l_cur_hl_name);
