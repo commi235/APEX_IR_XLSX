@@ -12,6 +12,8 @@ AS
   c_row_highlight CONSTANT VARCHAR2(30) := 'ROW_HIGHLIGHT';
   c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLICHT';
   
+  c_apex_date_fmt CONSTANT VARCHAR2(30) := 'YYYYMMDDHH24MISS';
+  
 
 /* Global Variables */
  
@@ -223,6 +225,20 @@ AS
     END IF;
   END get_settings;
 
+  PROCEDURE fix_borders
+  AS
+  BEGIN
+    FOR i IN 2..g_xlsx_options.display_column_count LOOP
+    /* strange fix for borders... */
+      ax_xlsx_builder.cell( p_col => i
+                          , p_row => g_current_row
+                          , p_value => to_char(NULL)
+                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                          , p_sheet => g_xlsx_options.sheet
+                          );
+    END LOOP;
+  END fix_borders;
+
   PROCEDURE print_filter_header
   AS
     l_condition_display VARCHAR2(400);
@@ -254,15 +270,17 @@ AS
                                       , g_col_settings(rec.condition_column_name).report_label
                                       );
         l_condition_display := REPLACE(l_condition_display, '#APXWS_OP_NAME#', rec.condition_operator);
-        --l_condition_display := replace(l_condition_display, '#APXWS_AND#', APEX_IR_HTML_EXCEL.apex_lang_message('APEXIR_AND','and'));
+        l_condition_display := REPLACE(l_condition_display, '#APXWS_AND#', 'and');
+        IF INSTR(l_condition_display, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_condition_display, '#APXWS_EXPR2_DATE#') > 0 THEN
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_DATE#', TO_CHAR(TO_DATE(rec.condition_expression, c_apex_date_fmt)));
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_DATE#', TO_CHAR(TO_DATE(rec.condition_expression2, c_apex_date_fmt)));
+        END IF;
+        
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR#', rec.condition_expression);
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NAME#', rec.condition_expression);
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NUMBER#', rec.condition_expression);
-        l_condition_display := replace(l_condition_display, '#APXWS_EXPR_DATE#', rec.condition_expression);
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NUMBER#', rec.condition_expression2);
-        l_condition_display := replace(l_condition_display, '#APXWS_EXPR2_DATE#', rec.condition_expression2);
       END IF;
       ax_xlsx_builder.mergecells( p_tl_col => 1
                           , p_tl_row => g_current_row
@@ -281,22 +299,7 @@ AS
                                                                         )
                           , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet );
-      FOR i IN 2..g_xlsx_options.display_column_count
-      LOOP
-      /* strange fix for borders... */
-        ax_xlsx_builder.cell( p_col => i
-                            , p_row => g_current_row
-                            , p_value => to_char(NULL)
-                            , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
-                                                                  , p_fgRGB => 'FFF8DC'
-                                                                  )
-                           , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
-                                                                          , p_horizontal => 'center'
-                                                                          )
-                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
-                            , p_sheet => g_xlsx_options.sheet
-                            );
-     END LOOP;
+      fix_borders;
       g_current_row := g_current_row + 1;
     END LOOP;
   END print_filter_header;
@@ -328,6 +331,7 @@ AS
                           , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet
                           );
+      fix_borders;
       g_current_row := g_current_row + 1;
     END IF;
     IF g_xlsx_options.show_filters THEN
@@ -356,6 +360,7 @@ AS
                                                                           )
                             , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
+        fix_borders;
         g_current_row := g_current_row + 1;
         l_cur_hl_name := g_row_highlights.next(l_cur_hl_name);
       END LOOP;
@@ -379,7 +384,9 @@ AS
                             , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
+                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
+        fix_borders;
         g_current_row := g_current_row + 1;        
         l_cur_hl_name := g_col_highlights.next(l_cur_hl_name);
       END LOOP;
@@ -458,6 +465,7 @@ AS
                             , p_fillId => ax_xlsx_builder.get_fill( p_patterntype => 'solid'
                                                                   , p_fgRGB => 'FFF8DC'
                                                                   )
+                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
       END IF;
     END LOOP;
