@@ -43,8 +43,8 @@ HOW TO USE
    Do not set the item to protected. 
    We'll assume the item is called P0_APEXIR_REGION_ID in the following.
 2. Create dynamic action with two true actions.  
-   First one sets value of hidden item with javascript and second pins value into session. 
-   Javascript Code to set value of item P0_APEXIR_REGION_ID: 
+   First one sets value of hidden item with javascript and second pins value into session.  
+   Javascript Code to set value of item P0_APEXIR_REGION_ID:
    ```javascript
    $('#apexir_REGION_ID').val().substring(1);
    ``` 
