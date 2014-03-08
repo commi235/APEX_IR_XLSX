@@ -5,6 +5,9 @@ AS
   /* Feature Set:
       - Highlights for rows and columns
       - Header rows for title, highlights and filters
+    
+     TODO:
+      - Include aggregates for break column and totals
   */
 
   FUNCTION apexir2sheet
