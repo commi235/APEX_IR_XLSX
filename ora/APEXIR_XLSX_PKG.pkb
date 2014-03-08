@@ -196,11 +196,11 @@ AS
       dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_row_highlights(l_cur_highlight).col_num, g_cursor_info.num_tab );
       FOR i IN 0 .. p_fetched_row_cnt - 1 LOOP
         IF (g_cursor_info.num_tab(i + g_cursor_info.num_tab.FIRST()) IS NOT NULL) THEN
-          ax_xlsx_builder.set_row( p_row => g_current_row + i
-                                 , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+          xlsx_builder_pkg.set_row( p_row => g_current_row + i
+                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                        , p_rgb => g_row_highlights(l_cur_highlight).font_color
                                                                        )
-                                 , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                        , p_fgRGB => g_row_highlights(l_cur_highlight).bg_color
                                                                        )
                                  );
@@ -230,10 +230,10 @@ AS
   BEGIN
     FOR i IN 2..g_xlsx_options.display_column_count LOOP
     /* strange fix for borders... */
-      ax_xlsx_builder.cell( p_col => i
+      xlsx_builder_pkg.cell( p_col => i
                           , p_row => g_current_row
                           , p_value => to_char(NULL)
-                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                          , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet
                           );
     END LOOP;
@@ -282,22 +282,22 @@ AS
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
         l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
       END IF;
-      ax_xlsx_builder.mergecells( p_tl_col => 1
+      xlsx_builder_pkg.mergecells( p_tl_col => 1
                           , p_tl_row => g_current_row
                           , p_br_col => g_xlsx_options.display_column_count
                           , p_br_row => g_current_row
                           , p_sheet => g_xlsx_options.sheet
                           );
-      ax_xlsx_builder.cell( p_col => 1
+      xlsx_builder_pkg.cell( p_col => 1
                           , p_row => g_current_row
                           , p_value => l_condition_display
-                          , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                          , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                 , p_fgRGB => 'FFF8DC'
                                                                 )
-                          , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                          , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
                                                                         , p_horizontal => 'center'
                                                                         )
-                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                          , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet );
       fix_borders;
       g_current_row := g_current_row + 1;
@@ -309,26 +309,26 @@ AS
     l_cur_hl_name VARCHAR2(30);
   BEGIN
     IF g_xlsx_options.show_title THEN
-      ax_xlsx_builder.mergecells( p_tl_col => 1
+      xlsx_builder_pkg.mergecells( p_tl_col => 1
                                 , p_tl_row => g_current_row
                                 , p_br_col => g_xlsx_options.display_column_count
                                 , p_br_row => g_current_row
                                 , p_sheet => g_xlsx_options.sheet
                                 );
-      ax_xlsx_builder.cell( p_col => 1
+      xlsx_builder_pkg.cell( p_col => 1
                           , p_row => g_current_row
                           , p_value => g_apex_ir_info.report_title
-                          , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                          , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                 , p_fontsize => 14
                                                                 , p_bold => TRUE
                                                                 )
-                          , p_fillId => ax_xlsx_builder.get_fill( p_patterntype => 'solid'
+                          , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
                                                                 , p_fgRGB => 'FFF8DC'
                                                                 )
-                          , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                          , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
-                          , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                          , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                           , p_sheet => g_xlsx_options.sheet
                           );
       fix_borders;
@@ -340,25 +340,25 @@ AS
     IF g_xlsx_options.show_highlights THEN
       l_cur_hl_name := g_row_highlights.FIRST();
       WHILE (l_cur_hl_name IS NOT NULL) LOOP
-        ax_xlsx_builder.mergecells( p_tl_col => 1
+        xlsx_builder_pkg.mergecells( p_tl_col => 1
                                   , p_tl_row => g_current_row
                                   , p_br_col => g_xlsx_options.display_column_count
                                   , p_br_row => g_current_row
                                   , p_sheet => g_xlsx_options.sheet
                                   );
-        ax_xlsx_builder.cell( p_col => 1
+        xlsx_builder_pkg.cell( p_col => 1
                             , p_row => g_current_row
                             , p_value => g_row_highlights(l_cur_hl_name).highlight_name
-                            , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                            , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                   , p_rgb => g_row_highlights(l_cur_hl_name).font_color
                                                                   )
-                            , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                            , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                   , p_fgRGB => g_row_highlights(l_cur_hl_name).bg_color
                                                                   )
-                            , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                            , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
-                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                            , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
         fix_borders;
         g_current_row := g_current_row + 1;
@@ -366,25 +366,25 @@ AS
       END LOOP;
       l_cur_hl_name := g_col_highlights.FIRST();
       WHILE (l_cur_hl_name IS NOT NULL) LOOP
-        ax_xlsx_builder.mergecells( p_tl_col => 1
+        xlsx_builder_pkg.mergecells( p_tl_col => 1
                                   , p_tl_row => g_current_row
                                   , p_br_col => g_xlsx_options.display_column_count
                                   , p_br_row => g_current_row
                                   , p_sheet => g_xlsx_options.sheet
                                   );
-        ax_xlsx_builder.cell( p_col => 1
+        xlsx_builder_pkg.cell( p_col => 1
                             , p_row => g_current_row
                             , p_value => g_col_highlights(l_cur_hl_name).highlight_name
-                            , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                            , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                   , p_rgb => g_col_highlights(l_cur_hl_name).font_color
                                                                   )
-                            , p_fillId => ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                            , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                   , p_fgRGB => g_col_highlights(l_cur_hl_name).bg_color
                                                                   )
-                            , p_alignment => ax_xlsx_builder.get_alignment( p_vertical => 'center'
+                            , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
                                                                           , p_horizontal => 'center'
                                                                           )
-                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                            , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
         fix_borders;
         g_current_row := g_current_row + 1;        
@@ -456,16 +456,16 @@ AS
   BEGIN
     FOR c IN 1..g_cursor_info.column_count LOOP
       IF g_sql_columns(c).is_displayed THEN
-        ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
+        xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
                             , p_row => g_current_row
                             , p_value => g_col_settings(g_sql_columns(c).col_name).report_label
-                            , p_fontId => ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                            , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                   , p_bold => TRUE
                                                                   )
-                            , p_fillId => ax_xlsx_builder.get_fill( p_patterntype => 'solid'
+                            , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
                                                                   , p_fgRGB => 'FFF8DC'
                                                                   )
-                            , p_borderId => ax_xlsx_builder.get_border('thin', 'thin', 'thin', 'thin')
+                            , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                             , p_sheet => g_xlsx_options.sheet );
       END IF;
     END LOOP;
@@ -508,19 +508,19 @@ AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.num_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
-      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+      xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                           , p_row => g_current_row + i
                           , p_value => g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
                           , p_fontId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                            xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                     , p_rgb => p_active_highlights(i).font_color
                                                                     )
                                           ELSE NULL
                                         END
                           , p_fillId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                            xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                     , p_fgRGB => p_active_highlights(i).bg_color
                                                                     )
                                           ELSE NULL
@@ -538,19 +538,19 @@ AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.date_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
-      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+      xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                           , p_row => g_current_row + i
                           , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
                           , p_fontId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                            xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                     , p_rgb => p_active_highlights(i).font_color
                                                                     )
                                           ELSE NULL
                                         END
                           , p_fillId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                            xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                     , p_fgRGB => p_active_highlights(i).bg_color
                                                                     )
                                           ELSE NULL
@@ -568,20 +568,20 @@ AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.vc_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
-      ax_xlsx_builder.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+      xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                           , p_row => g_current_row + i
                           , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
-                          , p_alignment => ax_xlsx_builder.get_alignment(p_wrapText => FALSE)
+                          , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
                           , p_fontId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_font( p_name => g_xlsx_options.default_font
+                                            xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                     , p_rgb => p_active_highlights(i).font_color
                                                                     )
                                           ELSE NULL
                                         END
                           , p_fillId => CASE
                                           WHEN p_active_highlights.EXISTS(i) THEN
-                                            ax_xlsx_builder.get_fill( p_patternType => 'solid'
+                                            xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                     , p_fgRGB => p_active_highlights(i).bg_color
                                                                     )
                                           ELSE NULL
@@ -679,7 +679,7 @@ AS
     g_xlsx_options.display_column_count := 0; -- shift result set to right if > 0
     g_xlsx_options.default_font := 'Arial';
     g_xlsx_options.default_border_color := 'b0a070'; -- not yet implemented...
-    g_xlsx_options.sheet := ax_xlsx_builder.new_sheet; -- needed before running any ax_xlsx_builder commands
+    g_xlsx_options.sheet := xlsx_builder_pkg.new_sheet; -- needed before running any xlsx_builder_pkg commands
 
     -- retrieve IR infos
     get_settings();
@@ -700,7 +700,7 @@ AS
     print_data;
     
     -- return the generated spreadsheet
-    RETURN ax_xlsx_builder.finish;
+    RETURN xlsx_builder_pkg.finish;
   EXCEPTION
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
