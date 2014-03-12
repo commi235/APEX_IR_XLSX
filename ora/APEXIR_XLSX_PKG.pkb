@@ -255,8 +255,8 @@ AS
                          ON r.application_id = cond.application_id
                         AND r.page_id = cond.page_id
                         AND r.report_id = cond.report_id
-                 WHERE cond.application_id = 110
-                   AND cond.page_id = 4
+                 WHERE cond.application_id = g_apex_ir_info.application_id
+                   AND cond.page_id = g_apex_ir_info.page_id
                    AND cond.condition_type IN ('Search', 'Filter')
                    AND cond.condition_enabled = 'Yes'
                 )
