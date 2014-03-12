@@ -257,6 +257,8 @@ AS
                         AND r.report_id = cond.report_id
                  WHERE cond.application_id = g_apex_ir_info.application_id
                    AND cond.page_id = g_apex_ir_info.page_id
+                   AND r.base_report_id = g_apex_ir_info.base_report_id
+                   AND r.session_id = g_apex_ir_info.session_id
                    AND cond.condition_type IN ('Search', 'Filter')
                    AND cond.condition_enabled = 'Yes'
                 )
