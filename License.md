@@ -1,13 +1,13 @@
-This license applies to all source code and examples in this software distribution,
+This license applies to all source code and examples in this software distribution, 
 UNLESS a specific file contains a different license, copyright notice, or attribution to another author.
 
 =============
 
-The APEX IR XLSX Download Library is released as open source under the BSD license:
+The APEX IR XLSX Download Library is released as open source under the BSD license:  
 http://www.opensource.org/licenses/bsd-license.php
 
 
-Copyright (c) 2014, Moritz Klein (http://mk-commi.blogspot.de)
+Copyright (c) 2014, Moritz Klein (http://mk-commi.blogspot.de)  
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
