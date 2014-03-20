@@ -40,6 +40,7 @@ AS
     , page_id NUMBER -- Page ID IR belongs to
     , region_id NUMBER -- Region ID of IR Region
     , session_id NUMBER -- Session ID for Request
+    , request VARCHAR2(4000) -- Request value
     , base_report_id NUMBER -- Report ID for Request
     , report_title VARCHAR2(4000) -- Derived Report Title
     , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
