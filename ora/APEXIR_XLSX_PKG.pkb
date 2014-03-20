@@ -413,7 +413,11 @@ AS
     
     /* Bind values from IR structure*/
     FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP
-      dbms_sql.bind_variable( g_cursor_info.cursor_id, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
+      IF g_apex_ir_info.report_definition.binds(i).NAME = 'REQUEST' THEN
+        dbms_sql.bind_variable( g_cursor_info.cursor_id, g_apex_ir_info.report_definition.binds(i).NAME, g_apex_ir_info.request);
+      ELSE
+        dbms_sql.bind_variable( g_cursor_info.cursor_id, g_apex_ir_info.report_definition.binds(i).name, g_apex_ir_info.report_definition.binds(i).value);
+      END IF;
     END LOOP;
 
     /* Amend column settings*/    
@@ -658,6 +662,7 @@ AS
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
+    , p_ir_request VARCHAR2 := V('REQUEST')
     , p_column_headers BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := FALSE
     , p_process_highlights IN BOOLEAN := TRUE
@@ -673,6 +678,7 @@ AS
     g_apex_ir_info.page_id := p_ir_page_id;
     g_apex_ir_info.session_id := p_ir_session_id;
     g_apex_ir_info.region_id := p_ir_region_id;
+    g_apex_ir_info.request := p_ir_request;
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
     g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
     
