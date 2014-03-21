@@ -11,6 +11,7 @@ AS
   c_display_column CONSTANT VARCHAR2(30) := 'DISPLAY';
   c_row_highlight CONSTANT VARCHAR2(30) := 'ROW_HIGHLIGHT';
   c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLICHT';
+  c_break_definition CONSTANT VARCHAR2(30) := 'BREAK_DEF';
   
   c_apex_date_fmt CONSTANT VARCHAR2(30) := 'YYYYMMDDHH24MISS';
   
@@ -128,7 +129,12 @@ AS
     l_cur_col := g_col_settings.FIRST();
     WHILE (l_cur_col IS NOT NULL)
     LOOP
-      g_col_settings(l_cur_col).is_break_col := l_break_on IS NOT NULL AND INSTR(l_break_on, l_cur_col) > 0;
+      IF l_break_on IS NOT NULL AND INSTR(l_break_on, l_cur_col) > 0 THEN
+        g_col_settings(l_cur_col).is_break_col := TRUE;
+        IF NOT g_col_settings(l_cur_col).is_visible THEN
+          g_apex_ir_info.final_sql := l_cur_col || ' || ';
+        END IF;
+      END IF;
       g_col_settings(l_cur_col).sum_on_break := l_sum_cols IS NOT NULL AND INSTR(l_sum_cols, l_cur_col) > 0;
       g_col_settings(l_cur_col).avg_on_break := l_avg_cols IS NOT NULL AND INSTR(l_avg_cols, l_cur_col) > 0;
       g_col_settings(l_cur_col).max_on_break := l_max_cols IS NOT NULL AND INSTR(l_max_cols, l_cur_col) > 0;
@@ -138,6 +144,7 @@ AS
       g_col_settings(l_cur_col).count_distinct_on_break := l_count_distinct_cols IS NOT NULL AND INSTR(l_count_distinct_cols, l_cur_col) > 0;
       l_cur_col := g_col_settings.next(l_cur_col);
     END LOOP;
+    g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '||') || ' AS break_def';
   END get_aggregates;
 
   PROCEDURE get_highlights
@@ -601,6 +608,12 @@ AS
     END LOOP;
     g_cursor_info.vc_tab.DELETE;
   END print_vc_column;
+  
+  PROCEDURE print_break_row
+  AS
+  BEGIN
+    NULL;
+  END print_break_row;
 
   PROCEDURE print_data
   AS
@@ -695,9 +708,9 @@ AS
     g_xlsx_options.sheet := xlsx_builder_pkg.new_sheet; -- needed before running any xlsx_builder_pkg commands
 
     -- retrieve IR infos
-    get_settings();
+    get_settings;
     -- construct full SQL and prepare cursor    
-    prepare_cursor();
+    prepare_cursor;
     
     -- print header if any header option is enabled
     IF g_xlsx_options.show_title OR g_xlsx_options.show_filters OR g_xlsx_options.show_highlights THEN
