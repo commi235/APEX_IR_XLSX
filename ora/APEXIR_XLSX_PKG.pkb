@@ -157,7 +157,7 @@ AS
                            THEN NULL
                          ELSE cond.condition_column_name
                        END condition_column_name,
-                       REPLACE (cond.condition_sql, '#APXWS_EXPR#', cond.condition_expression) test_sql,
+                       REPLACE (cond.condition_sql, '#APXWS_EXPR#', '''' || cond.condition_expression || '''') test_sql,
                        cond.condition_name,
                        REPLACE(COALESCE(cond.highlight_row_color, cond.highlight_cell_color), '#') bg_color,
                        REPLACE(COALESCE(cond.highlight_row_font_color, cond.highlight_cell_font_color), '#') font_color
