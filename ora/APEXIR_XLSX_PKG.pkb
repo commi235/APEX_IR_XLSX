@@ -27,6 +27,7 @@ AS
   g_current_row PLS_INTEGER := 1;
   g_cursor_info apexir_xlsx_types_pkg.t_cursor_info;
   g_sql_columns apexir_xlsx_types_pkg.t_sql_col_infos;
+  g_nls_numeric_characters VARCHAR2(2);
 
 /* Support Procedures */
 
@@ -56,14 +57,15 @@ AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
   BEGIN
     -- These column names are static defined, used as reference
-    FOR rec IN ( SELECT column_alias, report_label, display_text_as
+    FOR rec IN ( SELECT column_alias, report_label, display_text_as, format_mask
                    FROM APEX_APPLICATION_PAGE_IR_COL
                   WHERE page_id = g_apex_ir_info.page_id
                     AND application_id = g_apex_ir_info.application_id
                     AND region_id = g_apex_ir_info.region_id )
     LOOP
       col_rec.report_label := rec.report_label;
-      col_rec.is_visible := rec.display_text_as != 'HIDDEN';      
+      col_rec.is_visible := rec.display_text_as != 'HIDDEN';
+      col_rec.format_mask := rec.format_mask;
       g_col_settings(rec.column_alias) := col_rec;
     END LOOP;
   END get_std_columns;
@@ -74,7 +76,7 @@ AS
     col_rec  apexir_xlsx_types_pkg.t_apex_ir_col;
   BEGIN
     -- computations are run-time data, therefore need base report ID and session
-    FOR rec IN (SELECT computation_column_alias,computation_report_label
+    FOR rec IN (SELECT computation_column_alias,computation_report_label, computation_format_mask
                   FROM apex_application_page_ir_comp comp JOIN apex_application_page_ir_rpt rpt
                          ON rpt.application_id = comp.application_id
                         AND rpt.page_id = comp.page_id
@@ -86,6 +88,7 @@ AS
     LOOP
       col_rec.report_label := rec.computation_report_label;
       col_rec.is_visible := TRUE;
+      col_rec.format_mask := rec.computation_format_mask;
       g_col_settings(rec.computation_column_alias) := col_rec;
     END LOOP;
   END get_computations;
@@ -221,6 +224,11 @@ AS
   PROCEDURE get_settings
   AS
   BEGIN
+    SELECT VALUE
+      INTO g_nls_numeric_characters
+      FROM v$nls_parameters
+     where parameter = 'NLS_NUMERIC_CHARACTERS';
+    
     get_report_title;
     get_std_columns;
     get_computations;
@@ -526,15 +534,16 @@ AS
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i
                            , p_value => g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
+                           , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraNumFmt2Excel(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask))
                            , p_fontId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                       , p_rgb => p_active_highlights(i).font_color
                                                                       )
                                            ELSE NULL
                                          END
                            , p_fillId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).bg_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                       , p_fgRGB => p_active_highlights(i).bg_color
                                                                       )
@@ -558,14 +567,14 @@ AS
                            , p_row => g_current_row + i
                            , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
                            , p_fontId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                       , p_rgb => p_active_highlights(i).font_color
                                                                       )
                                            ELSE NULL
                                          END
                            , p_fillId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).bg_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                       , p_fgRGB => p_active_highlights(i).bg_color
                                                                       )
@@ -590,14 +599,14 @@ AS
                            , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
                            , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
                            , p_fontId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                       , p_rgb => p_active_highlights(i).font_color
                                                                       )
                                            ELSE NULL
                                          END
                            , p_fillId => CASE
-                                           WHEN p_active_highlights.EXISTS(i) THEN
+                                           WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).bg_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_fill( p_patternType => 'solid'
                                                                       , p_fgRGB => p_active_highlights(i).bg_color
                                                                       )

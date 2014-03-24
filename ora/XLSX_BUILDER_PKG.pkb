@@ -342,6 +342,23 @@ IS
     return t_format;
   end;
 --
+
+  FUNCTION OraNumFmt2Excel ( p_format VARCHAR2 )
+    RETURN VARCHAR2
+  AS
+    l_mso_fmt VARCHAR2(255);
+  BEGIN
+    IF INSTR(p_format, 'D') > 0 THEN
+      l_mso_fmt := '.' || REPLACE (substr(p_format,instr(p_format,'D')+1),'9','0');
+    END IF;
+    IF instr(p_format,'G') > 0 THEN
+      l_mso_fmt := '\#,\#\#0' || l_mso_fmt;
+    ELSE
+      l_mso_fmt := '0' || l_mso_fmt;
+    END IF;
+    RETURN l_mso_fmt;
+  END OraNumFmt2Excel;
+
   function get_numFmt( p_format varchar2 := null )
   return pls_integer
   is

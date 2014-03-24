@@ -28,6 +28,7 @@ AS
     , count_on_break BOOLEAN
     , count_distinct_on_break BOOLEAN
     , highlight_conds t_apex_ir_highlights
+    , format_mask apex_application_page_ir_col.format_mask%TYPE
     , sql_col_num NUMBER -- defines which SQL column to check
     , display_column PLS_INTEGER
     )

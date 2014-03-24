@@ -31,8 +31,10 @@ is
 **     Added list_validation = drop-down 
 **   Date: 27-08-2013
 **     Added freeze_pane
-**   Date: 01-03-2014
+**   Date: 01-03-2014 (MK)
 **     Changed new_sheet to function returning sheet id
+**   Date: 22-03-2014 (MK)
+**     Added function to convert Oracle Number Format to Excel Format
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2012 by Anton Scheffer
@@ -201,6 +203,10 @@ THE SOFTWARE.
   function OraFmt2Excel( p_format varchar2 := null )
   return varchar2;
 --
+
+  FUNCTION OraNumFmt2Excel ( p_format VARCHAR2 )
+    RETURN VARCHAR2;
+    
   function get_numFmt( p_format varchar2 := null )
   return pls_integer;
 --
