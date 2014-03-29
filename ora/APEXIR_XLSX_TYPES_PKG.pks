@@ -15,7 +15,6 @@ AS
   TYPE t_apex_ir_highlights IS TABLE OF t_apex_ir_highlight INDEX BY VARCHAR2(30);
   TYPE t_apex_ir_active_hl IS TABLE OF t_apex_ir_highlight INDEX BY PLS_INTEGER;
 
-  -- Types to hold run-time information
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
@@ -46,6 +45,7 @@ AS
     , report_title VARCHAR2(4000) -- Derived Report Title
     , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
     , final_sql VARCHAR2(32767)
+    , break_def_column PLS_INTEGER -- sql column number of break definition
     )
   ;
 

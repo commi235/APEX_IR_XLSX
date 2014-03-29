@@ -1,6 +1,8 @@
 CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG" 
 AS
 
+  TYPE t_break_rows IS TABLE OF CHAR(1) INDEX BY PLS_INTEGER; --zero based break rows
+
 /* Constants */
   c_bulk_size CONSTANT pls_integer := 200;
   
@@ -134,8 +136,8 @@ AS
     LOOP
       IF l_break_on IS NOT NULL AND INSTR(l_break_on, l_cur_col) > 0 THEN
         g_col_settings(l_cur_col).is_break_col := TRUE;
-        IF NOT g_col_settings(l_cur_col).is_visible THEN
-          g_apex_ir_info.final_sql := l_cur_col || ' || ';
+        IF g_col_settings(l_cur_col).is_visible THEN
+          g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || l_cur_col || ' || ';
         END IF;
       END IF;
       g_col_settings(l_cur_col).sum_on_break := l_sum_cols IS NOT NULL AND INSTR(l_sum_cols, l_cur_col) > 0;
@@ -147,7 +149,10 @@ AS
       g_col_settings(l_cur_col).count_distinct_on_break := l_count_distinct_cols IS NOT NULL AND INSTR(l_count_distinct_cols, l_cur_col) > 0;
       l_cur_col := g_col_settings.next(l_cur_col);
     END LOOP;
-    g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '||') || ' AS break_def';
+    g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '|| ') || ' AS ' || c_break_definition;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        g_xlsx_options.show_aggregates := FALSE; --no aggregates defined switch off...
   END get_aggregates;
 
   PROCEDURE get_highlights
@@ -197,7 +202,7 @@ AS
     END LOOP;
   END get_highlights;
   
-  PROCEDURE process_row_highlights (p_fetched_row_cnt IN PLS_INTEGER)
+  PROCEDURE process_row_highlights (p_fetched_row_cnt IN PLS_INTEGER, p_break_rows t_break_rows)
   AS
     l_cur_highlight VARCHAR2(30);
   BEGIN
@@ -206,7 +211,7 @@ AS
       dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_row_highlights(l_cur_highlight).col_num, g_cursor_info.num_tab );
       FOR i IN 0 .. p_fetched_row_cnt - 1 LOOP
         IF (g_cursor_info.num_tab(i + g_cursor_info.num_tab.FIRST()) IS NOT NULL) THEN
-          xlsx_builder_pkg.set_row( p_row => g_current_row + i
+          xlsx_builder_pkg.set_row( p_row => g_current_row + i + p_break_rows(i)
                                   , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                          , p_rgb => g_row_highlights(l_cur_highlight).font_color
                                                                          )
@@ -468,8 +473,10 @@ AS
         g_sql_columns(c).col_type := c_column_highlight;
         l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
         g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
-      END IF;
-      
+      ELSIF l_desc_tab(c).col_name = c_break_definition THEN
+        g_sql_columns(c).col_type := c_break_definition;
+        g_apex_ir_info.break_def_column := c;
+      END IF;      
     END LOOP;  
   END prepare_cursor;
 
@@ -526,13 +533,14 @@ AS
   PROCEDURE print_num_column ( p_column_position IN PLS_INTEGER
                              , p_fetched_row_cnt IN PLS_INTEGER
                              , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
+                             , p_break_rows IN t_break_rows
                              )
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.num_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
-                           , p_row => g_current_row + i
+                           , p_row => g_current_row + i + p_break_rows(i)
                            , p_value => g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
                            , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraNumFmt2Excel(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask))
                            , p_fontId => CASE
@@ -558,13 +566,14 @@ AS
   PROCEDURE print_date_column ( p_column_position IN PLS_INTEGER
                               , p_fetched_row_cnt IN PLS_INTEGER
                               , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
+                              , p_break_rows IN t_break_rows
                               )
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.date_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
-                           , p_row => g_current_row + i
+                           , p_row => g_current_row + i + p_break_rows(i)
                            , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
                            , p_fontId => CASE
                                            WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
@@ -589,13 +598,14 @@ AS
   PROCEDURE print_vc_column ( p_column_position IN PLS_INTEGER
                             , p_fetched_row_cnt IN PLS_INTEGER
                             , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
+                            , p_break_rows IN t_break_rows
                             )
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.vc_tab );
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
-                           , p_row => g_current_row + i
+                           , p_row => g_current_row + i + p_break_rows(i)
                            , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
                            , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
                            , p_fontId => CASE
@@ -618,24 +628,44 @@ AS
     g_cursor_info.vc_tab.DELETE;
   END print_vc_column;
   
-  PROCEDURE print_break_row
+  FUNCTION process_break_rows (p_fetched_row_cnt IN PLS_INTEGER)
+    RETURN t_break_rows
   AS
+    l_retval t_break_rows;
+    l_cnt NUMBER := 0;
   BEGIN
-    NULL;
-  END print_break_row;
+    l_retval(0) := 0;
+    IF g_xlsx_options.show_aggregates THEN
+      DBMS_SQL.COLUMN_VALUE( g_cursor_info.cursor_id, g_apex_ir_info.break_def_column, g_cursor_info.vc_tab);
+      FOR i IN 2..p_fetched_row_cnt LOOP
+        IF g_cursor_info.vc_tab(i) != g_cursor_info.vc_tab(i-1) THEN
+          l_cnt := l_cnt + 1;
+        END IF;
+        l_retval(i - 1) := l_cnt;
+      END LOOP;
+      g_cursor_info.vc_tab.DELETE;
+    ELSE
+      FOR i IN 2..p_fetched_row_cnt LOOP
+        l_retval(i - 1) := l_cnt;
+      END LOOP;
+    END IF;
+    RETURN l_retval;
+  END process_break_rows;
 
   PROCEDURE print_data
   AS
     l_cur_col_name VARCHAR2(4000);
     l_fetched_row_cnt PLS_INTEGER;
     l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
-    l_active_col_highlights apexir_xlsx_types_pkg.t_apex_ir_active_hl;  
+    l_active_col_highlights apexir_xlsx_types_pkg.t_apex_ir_active_hl;
+    l_break_rows t_break_rows;
   BEGIN
     l_fetched_row_cnt := dbms_sql.execute( g_cursor_info.cursor_id );
     LOOP
       l_fetched_row_cnt := dbms_sql.fetch_rows( g_cursor_info.cursor_id );
       IF l_fetched_row_cnt > 0 THEN
-        process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt );
+        l_break_rows := process_break_rows( p_fetched_row_cnt => l_fetched_row_cnt );
+        process_row_highlights( p_fetched_row_cnt => l_fetched_row_cnt, p_break_rows => l_break_rows );
         FOR c IN 1..g_cursor_info.column_count LOOP
           IF g_sql_columns(c).is_displayed THEN
             -- next display column, empty active highlights
@@ -655,16 +685,19 @@ AS
                 print_num_column( p_column_position => c
                                 , p_fetched_row_cnt => l_fetched_row_cnt
                                 , p_active_highlights => l_active_col_highlights
+                                , p_break_rows => l_break_rows
                                 );
               WHEN g_sql_columns(c).col_data_type = c_col_data_type_date THEN
                 print_date_column( p_column_position => c
                                  , p_fetched_row_cnt => l_fetched_row_cnt
                                  , p_active_highlights => l_active_col_highlights
+                                , p_break_rows => l_break_rows
                                  );
               WHEN g_sql_columns(c).col_data_type = c_col_data_type_vc THEN
                 print_vc_column( p_column_position => c
                                , p_fetched_row_cnt => l_fetched_row_cnt
                                , p_active_highlights => l_active_col_highlights
+                                , p_break_rows => l_break_rows
                                );
               ELSE NULL; -- unsupported data type
             END CASE;
@@ -735,14 +768,14 @@ AS
     print_data;
     
     -- return the generated spreadsheet
-    RETURN xlsx_builder_pkg.finish;
-  EXCEPTION
+    RETURN xlsx_builder_pkg.FINISH;
+/*  EXCEPTION
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
         dbms_sql.close_cursor( g_cursor_info.cursor_id );
       END IF;
       RAISE;
-      RETURN NULL;
+      RETURN NULL;*/
   END apexir2sheet;
 
 END APEXIR_XLSX_PKG;
