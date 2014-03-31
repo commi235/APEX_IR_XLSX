@@ -28,17 +28,13 @@ AS
     )
   ;
 
+  TYPE t_apex_ir_col_aggregates IS TABLE OF PLS_INTEGER INDEX BY VARCHAR2(30);
+
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
     , is_break_col BOOLEAN
-    , sum_col_num PLS_INTEGER -- sql column holding sum aggregate
-    , avg_col_num PLS_INTEGER -- sql column holding avg aggregate
-    , max_col_num PLS_INTEGER -- sql column holding max aggregate
-    , min_col_num PLS_INTEGER -- sql column holding min aggregate
-    , median_col_num PLS_INTEGER -- sql column holding median aggregate
-    , count_col_num PLS_INTEGER -- sql column holding count aggregate
-    , count_distinct_col_num PLS_INTEGER -- sql column holding count distinct aggregate
+    , aggregate_col_nums t_apex_ir_col_aggregates
     , highlight_conds t_apex_ir_highlights
     , format_mask apex_application_page_ir_col.format_mask%TYPE
     , sql_col_num NUMBER -- defines which SQL column to check
@@ -47,6 +43,8 @@ AS
   ;
   
   TYPE t_apex_ir_cols IS TABLE OF t_apex_ir_col INDEX BY VARCHAR2(30);
+  
+  TYPE t_apex_ir_active_aggregates IS TABLE OF BOOLEAN INDEX BY VARCHAR2(30);
 
   TYPE t_apex_ir_info IS RECORD
     ( application_id NUMBER -- Application ID IR belongs to
@@ -60,6 +58,8 @@ AS
     , final_sql VARCHAR2(32767)
     , break_def_column PLS_INTEGER -- sql column number of break definition
     , aggregates_offset PLS_INTEGER -- sql column offset when calculating aggregate column numbers
+    , active_aggregates t_apex_ir_active_aggregates -- which types of aggregates are active ( count gives row offset )
+    , aggregate_type_disp_column PLS_INTEGER := 1 -- defaults to 1, meaning aggregates active but no break columns
     )
   ;
 
@@ -85,6 +85,8 @@ AS
     );
   
   TYPE t_sql_col_infos IS TABLE OF t_sql_col_info INDEX BY PLS_INTEGER;
+
+  TYPE t_break_rows IS TABLE OF NUMBER INDEX BY PLS_INTEGER; --zero based break rows
   
   TYPE t_cursor_info IS RECORD
     ( cursor_id PLS_INTEGER
@@ -92,6 +94,7 @@ AS
     , date_tab dbms_sql.date_table
     , num_tab dbms_sql.number_table
     , vc_tab dbms_sql.varchar2_table
+    , break_rows t_break_rows
     );
 
 END APEXIR_XLSX_TYPES_PKG;
