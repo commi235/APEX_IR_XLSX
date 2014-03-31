@@ -1,7 +1,7 @@
 CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG" 
 AS
 
-  TYPE t_break_rows IS TABLE OF CHAR(1) INDEX BY PLS_INTEGER; --zero based break rows
+  TYPE t_break_rows IS TABLE OF NUMBER INDEX BY PLS_INTEGER; --zero based break rows
 
 /* Constants */
   c_bulk_size CONSTANT pls_integer := 200;
@@ -14,6 +14,7 @@ AS
   c_row_highlight CONSTANT VARCHAR2(30) := 'ROW_HIGHLIGHT';
   c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLICHT';
   c_break_definition CONSTANT VARCHAR2(30) := 'BREAK_DEF';
+  c_aggregate_column CONSTANT VARCHAR2(30) := 'AGGREGATE';
   
   c_apex_date_fmt CONSTANT VARCHAR2(30) := 'YYYYMMDDHH24MISS';
   
@@ -95,17 +96,33 @@ AS
     END LOOP;
   END get_computations;
 
+  FUNCTION transform_aggregate (p_column_value IN VARCHAR2)
+    RETURN apexir_xlsx_types_pkg.t_apex_ir_aggregate
+  AS
+    l_retval apexir_xlsx_types_pkg.t_apex_ir_aggregate;
+    l_vc_arr2 apex_application_global.vc_arr2;
+  BEGIN
+    l_vc_arr2 := apex_util.string_to_table(p_column_value);
+    FOR i IN 1..l_vc_arr2.COUNT LOOP
+      l_retval(l_vc_arr2(i)) := i;
+    END LOOP;
+    RETURN l_retval;
+  END transform_aggregate;
+
   PROCEDURE get_aggregates
   AS
     l_avg_cols  apex_application_page_ir_rpt.avg_columns_on_break%TYPE;
     l_break_on  apex_application_page_ir_rpt.break_enabled_on%TYPE;
     l_count_cols  apex_application_page_ir_rpt.count_columns_on_break%TYPE;
     l_count_distinct_cols  apex_application_page_ir_rpt.count_distnt_col_on_break%TYPE;
-    l_cur_col  VARCHAR2(30);
     l_max_cols  apex_application_page_ir_rpt.max_columns_on_break%TYPE;
     l_median_cols  apex_application_page_ir_rpt.median_columns_on_break%TYPE;
     l_min_cols  apex_application_page_ir_rpt.min_columns_on_break%TYPE;
     l_sum_cols  apex_application_page_ir_rpt.sum_columns_on_break%TYPE;
+
+    l_cur_col  VARCHAR2(30);
+    l_aggregates apexir_xlsx_types_pkg.t_apex_ir_aggregates;
+    l_aggregate_col_offset PLS_INTEGER;
   BEGIN
     -- First get run-time settings for aggregate infos
     SELECT break_enabled_on,
@@ -130,6 +147,14 @@ AS
        AND base_report_id = g_apex_ir_info.base_report_id
        AND session_id = g_apex_ir_info.session_id;
 
+    l_aggregates.sum_cols := transform_aggregate(l_sum_cols);
+    l_aggregates.avg_cols := transform_aggregate(l_avg_cols);
+    l_aggregates.max_cols := transform_aggregate(l_max_cols);
+    l_aggregates.min_cols := transform_aggregate(l_min_cols);
+    l_aggregates.median_cols := transform_aggregate(l_median_cols);
+    l_aggregates.count_cols := transform_aggregate(l_count_cols);
+    l_aggregates.count_distinct_cols := transform_aggregate(l_count_distinct_cols);
+    
     -- Loop through all selected columns and apply settings
     l_cur_col := g_col_settings.FIRST();
     WHILE (l_cur_col IS NOT NULL)
@@ -140,13 +165,20 @@ AS
           g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || l_cur_col || ' || ';
         END IF;
       END IF;
-      g_col_settings(l_cur_col).sum_on_break := l_sum_cols IS NOT NULL AND INSTR(l_sum_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).avg_on_break := l_avg_cols IS NOT NULL AND INSTR(l_avg_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).max_on_break := l_max_cols IS NOT NULL AND INSTR(l_max_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).min_on_break := l_min_cols IS NOT NULL AND INSTR(l_min_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).median_on_break := l_median_cols IS NOT NULL AND INSTR(l_median_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).count_on_break := l_count_cols IS NOT NULL AND INSTR(l_count_cols, l_cur_col) > 0;
-      g_col_settings(l_cur_col).count_distinct_on_break := l_count_distinct_cols IS NOT NULL AND INSTR(l_count_distinct_cols, l_cur_col) > 0;
+      l_aggregate_col_offset := g_apex_ir_info.aggregates_offset; -- reset offset to global setting for every new column
+      g_col_settings(l_cur_col).sum_col_num := CASE WHEN l_aggregates.sum_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.sum_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.sum_cols.count;
+      g_col_settings(l_cur_col).avg_col_num := CASE WHEN l_aggregates.avg_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.avg_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.avg_cols.count;
+      g_col_settings(l_cur_col).max_col_num := CASE WHEN l_aggregates.max_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.max_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.max_cols.count;
+      g_col_settings(l_cur_col).min_col_num := CASE WHEN l_aggregates.min_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.min_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.min_cols.count;
+      g_col_settings(l_cur_col).median_col_num := CASE WHEN l_aggregates.median_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.median_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.median_cols.count;
+      g_col_settings(l_cur_col).count_col_num := CASE WHEN l_aggregates.count_cols.EXISTS(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.count_cols(l_cur_col) ELSE NULL END;
+      l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_cols.count;
+      g_col_settings(l_cur_col).count_distinct_col_num := CASE WHEN l_aggregates.count_distinct_cols.exists(l_cur_col) THEN l_aggregate_col_offset + l_aggregates.count_distinct_cols(l_cur_col) ELSE NULL END;
       l_cur_col := g_col_settings.next(l_cur_col);
     END LOOP;
     g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '|| ') || ' AS ' || c_break_definition;
@@ -476,7 +508,10 @@ AS
       ELSIF l_desc_tab(c).col_name = c_break_definition THEN
         g_sql_columns(c).col_type := c_break_definition;
         g_apex_ir_info.break_def_column := c;
-      END IF;      
+      ELSIF UPPER(l_desc_tab(c).col_name) LIKE '% OVER %' THEN
+        g_sql_columns(c).col_type := c_aggregate_column;
+        NULL;
+      END IF;
     END LOOP;  
   END prepare_cursor;
 
@@ -536,8 +571,12 @@ AS
                              , p_break_rows IN t_break_rows
                              )
   AS
+    l_num_aggregate dbms_sql.number_table;
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.num_tab );
+    IF g_col_settings(g_sql_columns(p_column_position).col_name).sum_col_num IS NOT NULL THEN
+      dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, g_col_settings(g_sql_columns(p_column_position).col_name).sum_col_num, l_num_aggregate );
+    END IF;
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + p_break_rows(i)
@@ -559,6 +598,16 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
+      IF g_col_settings(g_sql_columns(p_column_position).col_name).sum_col_num IS NOT NULL AND 
+         p_break_rows(i + 1) != p_break_rows(i)
+      THEN
+        xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
+                             , p_row => g_current_row + i + p_break_rows(i + 1)
+                             , p_value => l_num_aggregate( i + g_cursor_info.num_tab.FIRST() )
+                             , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraNumFmt2Excel(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask))
+                             , p_sheet => g_xlsx_options.sheet
+                             );
+      END IF;
     END loop;
     g_cursor_info.num_tab.DELETE;
   END print_num_column;
@@ -649,6 +698,7 @@ AS
         l_retval(i - 1) := l_cnt;
       END LOOP;
     END IF;
+    l_retval(p_fetched_row_cnt) := l_cnt + 1;
     RETURN l_retval;
   END process_break_rows;
 
@@ -656,7 +706,6 @@ AS
   AS
     l_cur_col_name VARCHAR2(4000);
     l_fetched_row_cnt PLS_INTEGER;
-    l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
     l_active_col_highlights apexir_xlsx_types_pkg.t_apex_ir_active_hl;
     l_break_rows t_break_rows;
   BEGIN
@@ -736,6 +785,7 @@ AS
     g_apex_ir_info.request := p_ir_request;
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
     g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
+    g_apex_ir_info.aggregates_offset := regexp_count(substr(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ') OVER (')), ',');
     
     -- Generation Options
     g_xlsx_options.show_aggregates := p_aggregates;

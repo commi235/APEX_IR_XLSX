@@ -15,17 +15,30 @@ AS
   TYPE t_apex_ir_highlights IS TABLE OF t_apex_ir_highlight INDEX BY VARCHAR2(30);
   TYPE t_apex_ir_active_hl IS TABLE OF t_apex_ir_highlight INDEX BY PLS_INTEGER;
 
+  TYPE t_apex_ir_aggregate IS TABLE OF PLS_INTEGER INDEX BY VARCHAR2(32767);
+
+  TYPE t_apex_ir_aggregates IS RECORD
+    ( sum_cols t_apex_ir_aggregate
+    , avg_cols t_apex_ir_aggregate
+    , max_cols t_apex_ir_aggregate
+    , min_cols t_apex_ir_aggregate
+    , median_cols t_apex_ir_aggregate
+    , count_cols t_apex_ir_aggregate
+    , count_distinct_cols t_apex_ir_aggregate    
+    )
+  ;
+
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
     , is_break_col BOOLEAN
-    , sum_on_break BOOLEAN
-    , avg_on_break BOOLEAN
-    , max_on_break BOOLEAN
-    , min_on_break BOOLEAN
-    , median_on_break BOOLEAN
-    , count_on_break BOOLEAN
-    , count_distinct_on_break BOOLEAN
+    , sum_col_num PLS_INTEGER -- sql column holding sum aggregate
+    , avg_col_num PLS_INTEGER -- sql column holding avg aggregate
+    , max_col_num PLS_INTEGER -- sql column holding max aggregate
+    , min_col_num PLS_INTEGER -- sql column holding min aggregate
+    , median_col_num PLS_INTEGER -- sql column holding median aggregate
+    , count_col_num PLS_INTEGER -- sql column holding count aggregate
+    , count_distinct_col_num PLS_INTEGER -- sql column holding count distinct aggregate
     , highlight_conds t_apex_ir_highlights
     , format_mask apex_application_page_ir_col.format_mask%TYPE
     , sql_col_num NUMBER -- defines which SQL column to check
@@ -46,6 +59,7 @@ AS
     , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
     , final_sql VARCHAR2(32767)
     , break_def_column PLS_INTEGER -- sql column number of break definition
+    , aggregates_offset PLS_INTEGER -- sql column offset when calculating aggregate column numbers
     )
   ;
 
