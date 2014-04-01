@@ -613,6 +613,12 @@ AS
             xlsx_builder_pkg.cell( p_col => g_col_settings(p_column_name).display_column
                                  , p_row => g_current_row + i - 1 + g_cursor_info.break_rows(i + 1) + l_aggregate_offset
                                  , p_value => l_aggregate_values( i + l_aggregate_values.FIRST() )
+                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                        , p_bold => TRUE
+                                                                        )
+                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                        , p_fgRGB => 'FFF8DC'
+                                                                        )
                                  , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraNumFmt2Excel(g_col_settings(p_column_name).format_mask))
                                  , p_sheet => g_xlsx_options.sheet
                                  );
@@ -632,9 +638,6 @@ AS
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.num_tab );
-    IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).aggregate_col_nums.count > 0 THEN
-      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
-    END IF;
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
@@ -656,19 +659,31 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(g_sql_columns(p_column_position).col_name).display_column THEN
         IF i = p_fetched_row_cnt OR g_cursor_info.break_rows(i + 1) != g_cursor_info.break_rows(i) THEN
           FOR j IN 1..g_apex_ir_info.active_aggregates.count LOOP
             xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                                  , p_row => g_current_row + i + g_cursor_info.break_rows(i) + j
-                                 , p_value => g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
-                                 , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                                 , p_value => CASE
+                                                WHEN g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col
+                                                  THEN g_cursor_info.num_tab( i + g_cursor_info.num_tab.FIRST() )
+                                                ELSE NULL
+                                              END
+                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                        , p_bold => TRUE
+                                                                        )
+                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                        , p_fgRGB => 'FFF8DC'
+                                                                        )
                                  , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
         END IF;
       END IF;
     END loop;
+    IF g_xlsx_options.show_aggregates THEN
+      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
+    END IF;
     g_cursor_info.num_tab.DELETE;
   END print_num_column;
 
@@ -679,9 +694,6 @@ AS
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.date_tab );
-    IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).aggregate_col_nums.count > 0 THEN
-      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
-    END IF;
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
@@ -702,19 +714,31 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(g_sql_columns(p_column_position).col_name).display_column THEN
         IF i = p_fetched_row_cnt OR g_cursor_info.break_rows(i + 1) != g_cursor_info.break_rows(i) THEN
           FOR j IN 1..g_apex_ir_info.active_aggregates.count LOOP
             xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                                  , p_row => g_current_row + i + g_cursor_info.break_rows(i) + j
-                                 , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
-                                 , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                                 , p_value => CASE
+                                                WHEN g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col
+                                                  THEN g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
+                                                ELSE NULL
+                                              END
+                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                        , p_bold => TRUE
+                                                                        )
+                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                        , p_fgRGB => 'FFF8DC'
+                                                                        )
                                  , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
         END IF;
       END IF;
     END LOOP;
+    IF g_xlsx_options.show_aggregates THEN
+      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
+    END IF;
     g_cursor_info.date_tab.DELETE;
   END print_date_column;
   
@@ -725,9 +749,6 @@ AS
   AS
   BEGIN
     dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id, p_column_position, g_cursor_info.vc_tab );
-    IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).aggregate_col_nums.count > 0 THEN
-      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
-    END IF;
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
@@ -749,20 +770,32 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(g_sql_columns(p_column_position).col_name).display_column THEN
         IF i = p_fetched_row_cnt OR g_cursor_info.break_rows(i + 1) != g_cursor_info.break_rows(i) THEN
           FOR j IN 1..g_apex_ir_info.active_aggregates.count LOOP
             xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                                  , p_row => g_current_row + i + g_cursor_info.break_rows(i) + j
-                                 , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
+                                 , p_value => CASE
+                                                WHEN g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col
+                                                  THEN g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
+                                               ELSE NULL
+                                             END
                                  , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
-                                 , p_sheet => g_xlsx_options.sheet
+                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                        , p_bold => TRUE
+                                                                        )
+                                , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                       , p_fgRGB => 'FFF8DC'
+                                                                       )
+                                , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
         END IF;
       END IF;
     END LOOP;
-
+    IF g_xlsx_options.show_aggregates THEN
+      print_aggregates(g_sql_columns(p_column_position).col_name, p_fetched_row_cnt);
+    END IF;
     g_cursor_info.vc_tab.DELETE;
   END print_vc_column;
 
@@ -773,10 +806,25 @@ AS
   BEGIN
     l_cur_aggregate_type := g_apex_ir_info.active_aggregates.FIRST();
     WHILE (l_cur_aggregate_type IS NOT NULL) LOOP
+      xlsx_builder_pkg.set_row( p_row => g_current_row + p_row_offset + l_cnt
+                        , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                               , p_bold => true
+                                                               )
+                        , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
+                                                               , p_fgRGB => 'FFF8DC'
+                                                               )
+                        );
+
       xlsx_builder_pkg.cell( p_col => g_apex_ir_info.aggregate_type_disp_column
                            , p_row => g_current_row + p_row_offset + l_cnt
                            , p_value => l_cur_aggregate_type
                            , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                           , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                  , p_bold => TRUE
+                                                                  )
+                           , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                  , p_fgRGB => 'FFF8DC'
+                                                                  )
                            , p_sheet => g_xlsx_options.sheet
                            );
       l_cnt := l_cnt + 1;
