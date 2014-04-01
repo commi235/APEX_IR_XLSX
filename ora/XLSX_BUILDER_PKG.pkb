@@ -352,7 +352,7 @@ IS
       l_mso_fmt := '.' || REPLACE (substr(p_format,instr(p_format,'D')+1),'9','0');
     END IF;
     IF instr(p_format,'G') > 0 THEN
-      l_mso_fmt := '\#,\#\#0' || l_mso_fmt;
+      l_mso_fmt := '#,##0' || l_mso_fmt;
     ELSE
       l_mso_fmt := '0' || l_mso_fmt;
     END IF;

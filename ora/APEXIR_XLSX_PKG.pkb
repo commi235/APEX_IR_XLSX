@@ -698,6 +698,7 @@ AS
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
                            , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
+                           , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraFmt2Excel(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask))
                            , p_fontId => CASE
                                            WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
