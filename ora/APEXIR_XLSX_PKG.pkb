@@ -1005,13 +1005,13 @@ AS
     l_retval.mime_type := 'application/octet';
     l_retval.file_size := dbms_lob.getlength(l_retval.file_content);
     RETURN l_retval;
-/*  EXCEPTION
+  EXCEPTION
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
         dbms_sql.close_cursor( g_cursor_info.cursor_id );
       END IF;
       RAISE;
-      RETURN NULL;*/
+      RETURN NULL;
   END apexir2sheet;
 
 END APEXIR_XLSX_PKG;
