@@ -74,6 +74,11 @@ AS
     , sheet PLS_INTEGER -- holds the worksheet reference
     , default_font VARCHAR2(100)
     , default_border_color VARCHAR2(100)
+    , allow_wrap_text BOOLEAN
+    , original_line_break VARCHAR2(10)
+    , replace_line_break VARCHAR2(10)
+    , default_date_format VARCHAR2(100)
+    , append_date_file_name BOOLEAN
     )
   ;
   
@@ -96,6 +101,11 @@ AS
     , vc_tab dbms_sql.varchar2_table
     , break_rows t_break_rows
     );
-
+  TYPE t_returnvalue IS RECORD
+    ( file_name VARCHAR2(255)
+    , file_content BLOB
+    , mime_type VARCHAR2(255)
+    , file_size NUMBER
+    );
 END APEXIR_XLSX_TYPES_PKG;
 /

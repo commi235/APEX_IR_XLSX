@@ -327,8 +327,8 @@ IS
 --
   function OraFmt2Excel( p_format varchar2 := null )
   return varchar2
-  is
-    t_format varchar2(1000) := substr( p_format, 1, 1000 );
+  IS
+    t_format varchar2(1000) := lower(substr( p_format, 1, 1000 ));
   begin
     t_format := replace( replace( t_format, 'hh24', 'hh' ), 'hh12', 'hh' );
     t_format := replace( t_format, 'mi', 'mm' );

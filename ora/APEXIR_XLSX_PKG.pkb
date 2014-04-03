@@ -54,6 +54,18 @@ AS
     ;
   END get_report_title;
 
+  FUNCTION replace_substitutions(p_data IN VARCHAR2, p_substitution IN VARCHAR2)
+    RETURN VARCHAR2
+  AS
+    l_retval VARCHAR2(4000) := p_data;
+    l_full_sub VARCHAR2(4000) := '&' || p_substitution || '.';
+  BEGIN
+    IF INSTR(p_data, l_full_sub) > 0 THEN
+      l_retval := REPLACE(l_retval, l_full_sub, v(p_substitution));
+    END IF;
+    RETURN l_retval;
+  END replace_substitutions;
+
   PROCEDURE get_std_columns
   AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
@@ -67,7 +79,7 @@ AS
     LOOP
       col_rec.report_label := rec.report_label;
       col_rec.is_visible := rec.display_text_as != 'HIDDEN';
-      col_rec.format_mask := rec.format_mask;
+      col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
       g_col_settings(rec.column_alias) := col_rec;
     END LOOP;
   END get_std_columns;
@@ -90,7 +102,7 @@ AS
     LOOP
       col_rec.report_label := rec.computation_report_label;
       col_rec.is_visible := TRUE;
-      col_rec.format_mask := rec.computation_format_mask;
+      col_rec.format_mask := replace_substitutions(rec.computation_format_mask, 'APP_DATE_TIME_FORMAT');
       g_col_settings(rec.computation_column_alias) := col_rec;
     END LOOP;
   END get_computations;
@@ -295,6 +307,12 @@ AS
       INTO g_nls_numeric_characters
       FROM v$nls_parameters
      where parameter = 'NLS_NUMERIC_CHARACTERS';
+    
+   SELECT VALUE
+     INTO g_xlsx_options.default_date_format
+     FROM v$nls_parameters
+    WHERE parameter = 'NLS_DATE_FORMAT';
+
     
     get_report_title;
     get_std_columns;
@@ -549,7 +567,11 @@ AS
       IF g_sql_columns(c).is_displayed THEN
         xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
                              , p_row => g_current_row
-                             , p_value => g_col_settings(g_sql_columns(c).col_name).report_label
+                             , p_value => REPLACE(g_col_settings(g_sql_columns(c).col_name).report_label, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
+                             , p_alignment => CASE 
+                                                WHEN g_xlsx_options.allow_wrap_text THEN NULL
+                                                ELSE xlsx_builder_pkg.get_alignment(p_vertical => 'center', p_horizontal => 'center', p_wrapText => FALSE)
+                                              END
                              , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                     , p_bold => TRUE
                                                                     )
@@ -698,7 +720,7 @@ AS
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
                            , p_value => g_cursor_info.date_tab( i + g_cursor_info.date_tab.FIRST() )
-                           , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraFmt2Excel(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask))
+                           , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraFmt2Excel(COALESCE(g_col_settings(g_sql_columns(p_column_position).col_name).format_mask, g_xlsx_options.default_date_format)))
                            , p_fontId => CASE
                                            WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
@@ -753,8 +775,8 @@ AS
     FOR i IN 0 .. p_fetched_row_cnt - 1 loop
       xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(p_column_position).col_name).display_column
                            , p_row => g_current_row + i + g_cursor_info.break_rows(i)
-                           , p_value => g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
-                           , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                           , p_value => REPLACE(g_cursor_info.vc_tab(i + g_cursor_info.vc_tab.FIRST()), g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
+                           , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
                            , p_fontId => CASE
                                            WHEN p_active_highlights.EXISTS(i) AND p_active_highlights(i).font_color IS NOT NULL THEN
                                              xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
@@ -778,10 +800,10 @@ AS
                                  , p_row => g_current_row + i + g_cursor_info.break_rows(i) + j
                                  , p_value => CASE
                                                 WHEN g_col_settings(g_sql_columns(p_column_position).col_name).is_break_col
-                                                  THEN g_cursor_info.vc_tab( i + g_cursor_info.vc_tab.FIRST() )
+                                                  THEN REPLACE(g_cursor_info.vc_tab(i + g_cursor_info.vc_tab.FIRST()), g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
                                                ELSE NULL
                                              END
-                                 , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                                 , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
                                  , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                         , p_bold => TRUE
                                                                         )
@@ -819,7 +841,7 @@ AS
       xlsx_builder_pkg.cell( p_col => g_apex_ir_info.aggregate_type_disp_column
                            , p_row => g_current_row + p_row_offset + l_cnt
                            , p_value => l_cur_aggregate_type
-                           , p_alignment => xlsx_builder_pkg.get_alignment(p_wrapText => FALSE)
+                           , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
                            , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                   , p_bold => TRUE
                                                                   )
@@ -925,9 +947,13 @@ AS
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
     , p_show_highlights IN BOOLEAN := TRUE
+    , p_original_line_break IN VARCHAR2 := '<br />'
+    , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_append_date IN BOOLEAN := TRUE
     )
-  RETURN BLOB
+  RETURN apexir_xlsx_types_pkg.t_returnvalue
   AS
+    l_retval apexir_xlsx_types_pkg.t_returnvalue;
   BEGIN
     -- IR infos
     g_apex_ir_info.application_id := p_app_id;
@@ -949,6 +975,10 @@ AS
     g_xlsx_options.display_column_count := 0; -- shift result set to right if > 0
     g_xlsx_options.default_font := 'Arial';
     g_xlsx_options.default_border_color := 'b0a070'; -- not yet implemented...
+    g_xlsx_options.allow_wrap_text := TRUE;
+    g_xlsx_options.original_line_break := p_original_line_break;
+    g_xlsx_options.replace_line_break := p_replace_line_break;
+    g_xlsx_options.append_date_file_name := p_append_date;
     g_xlsx_options.sheet := xlsx_builder_pkg.new_sheet; -- needed before running any xlsx_builder_pkg commands
 
     -- retrieve IR infos
@@ -969,8 +999,12 @@ AS
     -- Generate the "real" data
     print_data;
     
-    -- return the generated spreadsheet
-    RETURN xlsx_builder_pkg.FINISH;
+    -- return the generated spreadsheet and file info
+    l_retval.file_content := xlsx_builder_pkg.FINISH;
+    l_retval.file_name := g_apex_ir_info.report_title || CASE WHEN g_xlsx_options.append_date_file_name THEN '_' || to_char(SYSDATE, 'YYYYMMDD') ELSE NULL END || '.xlsx';
+    l_retval.mime_type := 'application/octet';
+    l_retval.file_size := dbms_lob.getlength(l_retval.file_content);
+    RETURN l_retval;
 /*  EXCEPTION
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN

@@ -1,5 +1,5 @@
 CREATE OR REPLACE PACKAGE "APEXIR_XLSX_PKG" 
-  AUTHID CURRENT_USER
+  AUTHID DEFINER
 AS 
 
   /* Feature Set:
@@ -22,8 +22,11 @@ AS
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
     , p_show_highlights IN BOOLEAN := TRUE
+    , p_original_line_break IN VARCHAR2 := '<br />'
+    , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_append_date IN BOOLEAN := TRUE
     )
-  RETURN BLOB;
+  RETURN apexir_xlsx_types_pkg.t_returnvalue;
 
 END APEXIR_XLSX_PKG;
 
