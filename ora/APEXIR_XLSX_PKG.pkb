@@ -226,7 +226,9 @@ AS
       END IF;
       l_cur_col := g_col_settings.next(l_cur_col);
     END LOOP;
-    g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '|| ') || ' AS ' || c_break_definition;
+    IF l_break_on IS NOT NULL THEN
+      g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '|| ') || ' AS ' || c_break_definition;
+    END IF;
   END get_aggregates;
 
   PROCEDURE get_highlights
@@ -860,7 +862,7 @@ AS
     l_cnt NUMBER := 0;
   BEGIN
     g_cursor_info.break_rows(0) := 0;
-    IF g_xlsx_options.show_aggregates THEN
+    IF g_xlsx_options.show_aggregates AND g_apex_ir_info.break_def_column IS NOT NULL THEN
       DBMS_SQL.COLUMN_VALUE( g_cursor_info.cursor_id, g_apex_ir_info.break_def_column, g_cursor_info.vc_tab);
       FOR i IN 2..p_fetched_row_cnt LOOP
         IF g_cursor_info.vc_tab(i) != g_cursor_info.vc_tab(i-1) THEN
@@ -942,7 +944,7 @@ AS
     , p_ir_session_id NUMBER := NV('SESSION')
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_column_headers BOOLEAN := TRUE
-    , p_aggregates IN BOOLEAN := FALSE
+    , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
@@ -1010,7 +1012,6 @@ AS
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
         dbms_sql.close_cursor( g_cursor_info.cursor_id );
       END IF;
-      RAISE;
       RETURN NULL;
   END apexir2sheet;
 

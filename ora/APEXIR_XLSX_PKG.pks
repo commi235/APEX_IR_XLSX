@@ -17,7 +17,7 @@ AS
     , p_ir_session_id NUMBER := NV('SESSION')
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_column_headers BOOLEAN := TRUE
-    , p_aggregates IN BOOLEAN := FALSE
+    , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
