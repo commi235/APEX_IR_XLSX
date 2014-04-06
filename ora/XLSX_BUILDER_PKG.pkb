@@ -329,14 +329,14 @@ IS
   return varchar2
   IS
     t_format varchar2(1000) := lower(substr( p_format, 1, 1000 ));
-  begin
-    t_format := replace( replace( t_format, 'hh24', 'hh' ), 'hh12', 'hh' );
-    t_format := replace( t_format, 'mi', 'mm' );
+  BEGIN
+    t_format := REPLACE( REPLACE( REPLACE(t_format, 'HH', 'hh'), 'hh24', 'hh' ), 'hh12', 'hh' );
+    t_format := replace( replace(t_format, 'MI', 'mi'), 'mi', 'mm' );
     t_format := replace( replace( replace( t_format, 'AM', '~~' ), 'PM', '~~' ), '~~', 'AM/PM' );
     t_format := replace( replace( replace( t_format, 'am', '~~' ), 'pm', '~~' ), '~~', 'AM/PM' );
     t_format := replace( replace( t_format, 'day', 'DAY' ), 'DAY', 'dddd' );
-    t_format := replace( replace( t_format, 'dy', 'DY' ), 'DAY', 'ddd' );
-    t_format := replace( replace( t_format, 'RR', 'RR' ), 'RR', 'YY' );
+    t_format := REPLACE( REPLACE( t_format, 'dy', 'DY' ), 'DAY', 'ddd' );
+    t_format := replace( replace( t_format, 'rr', 'RR' ), 'RR', 'YY' );
     t_format := replace( replace( t_format, 'month', 'MONTH' ), 'MONTH', 'mmmm' );
     t_format := replace( replace( t_format, 'mon', 'MON' ), 'MON', 'mmm' );
     return t_format;
