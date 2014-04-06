@@ -2,14 +2,6 @@ CREATE OR REPLACE PACKAGE "APEXIR_XLSX_PKG"
   AUTHID DEFINER
 AS 
 
-  /* Feature Set:
-      - Highlights for rows and columns
-      - Header rows for title, highlights and filters
-    
-     TODO:
-      - Include aggregates for break column and totals
-  */
-
   FUNCTION apexir2sheet
     ( p_ir_region_id NUMBER
     , p_app_id NUMBER := NV('APP_ID')
