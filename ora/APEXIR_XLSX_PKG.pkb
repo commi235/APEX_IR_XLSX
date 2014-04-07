@@ -507,7 +507,7 @@ AS
     -- Split sql query on first from and inject highlight conditions
     g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM')) 
                              || g_apex_ir_info.final_sql
-                             || SUBSTR(g_apex_ir_info.report_definition.sql_query, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
+                             || SUBSTR(apex_plugin_util.replace_substitutions(g_apex_ir_info.report_definition.sql_query), INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
 
     g_cursor_info.cursor_id := dbms_sql.open_cursor;
     dbms_sql.parse( g_cursor_info.cursor_id, g_apex_ir_info.final_sql, dbms_sql.NATIVE );

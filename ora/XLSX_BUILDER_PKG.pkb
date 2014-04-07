@@ -14,30 +14,6 @@ IS
     RETURN workbook;
   END get_workbook;
   
-  procedure blob2file
-    ( p_blob blob
-    , p_directory varchar2 := 'MY_DIR'
-    , p_filename varchar2 := 'my.xlsx'
-    )
-  is
-    t_fh utl_file.file_type;
-    t_len pls_integer := 32767;
-  begin
-    t_fh := utl_file.fopen( p_directory
-                          , p_filename
-                          , 'wb'
-                          );
-    for i in 0 .. trunc( ( dbms_lob.getlength( p_blob ) - 1 ) / t_len )
-    loop
-      utl_file.put_raw( t_fh
-                      , dbms_lob.substr( p_blob
-                                       , t_len
-                                       , i * t_len + 1
-                                       )
-                      );
-    end loop;
-    utl_file.fclose( t_fh );
-  end;
 --
   function raw2num( p_raw raw, p_len integer, p_pos integer )
   return number
@@ -1737,22 +1713,14 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     return t_excel;
   end;
 --
-  procedure save
-    ( p_directory varchar2
-    , p_filename varchar2
-    )
-  is
-  begin
-    blob2file( finish, p_directory, p_filename );
-  end;
---
-  procedure query2sheet
+  function query2sheet
     ( p_sql varchar2
     , p_column_headers boolean := true
     , p_directory varchar2 := null
     , p_filename varchar2 := null
     , p_sheet pls_integer := null
     )
+  return blob
   is
     t_sheet pls_integer;
     t_c integer;
@@ -1843,17 +1811,15 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       t_cur_row := t_cur_row + t_r;
     end loop;
     dbms_sql.close_cursor( t_c );
-    if ( p_directory is not null and  p_filename is not null )
-    then
-      save( p_directory, p_filename );
-    end if;
+    return finish;
   exception
     when others
     then
       if dbms_sql.is_open( t_c )
       then
         dbms_sql.close_cursor( t_c );
-      end if;
+      END IF;
+      return null;
   end;
 END;
 

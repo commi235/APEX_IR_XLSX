@@ -35,6 +35,9 @@ is
 **     Changed new_sheet to function returning sheet id
 **   Date: 22-03-2014 (MK)
 **     Added function to convert Oracle Number Format to Excel Format
+**   Date: 07-04-2014 (MK)
+**     Removed references to UTL_FILE
+**     query2sheet is now function returning BLOB
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2012 by Anton Scheffer
@@ -430,18 +433,14 @@ top
   function finish
   return blob;
 --
-  procedure save
-    ( p_directory varchar2
-    , p_filename varchar2
-    );
---
-  procedure query2sheet
+  function query2sheet
     ( p_sql varchar2
     , p_column_headers boolean := true
     , p_directory varchar2 := null
     , p_filename varchar2 := null
     , p_sheet pls_integer := null
-    );
+    )
+  return blob;
 --
 
 end;
