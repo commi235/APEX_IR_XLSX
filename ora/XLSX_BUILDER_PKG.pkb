@@ -608,8 +608,8 @@ IS
   is
     t_numFmtId pls_integer := p_numFmtId;
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
-  begin
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := p_value - to_date('01-01-1904','DD-MM-YYYY');
+  BEGIN
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := p_value - to_date('01-01-1900','DD-MM-YYYY');
     if t_numFmtId is null
        and not (   workbook.sheets( t_sheet ).col_fmts.exists( p_col )
                and workbook.sheets( t_sheet ).col_fmts( p_col ).numFmtId is not null
@@ -1117,7 +1117,7 @@ ts timestamp := systimestamp;
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <fileVersion appName="xl" lastEdited="5" lowestEdited="5" rupBuild="9302"/>
-<workbookPr date1904="true" defaultThemeVersion="124226"/>
+<workbookPr date1904="false" defaultThemeVersion="124226"/>
 <bookViews>
 <workbookView xWindow="120" yWindow="45" windowWidth="19155" windowHeight="4935"/>
 </bookViews>

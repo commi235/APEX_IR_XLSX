@@ -38,6 +38,7 @@ is
 **   Date: 07-04-2014 (MK)
 **     Removed references to UTL_FILE
 **     query2sheet is now function returning BLOB
+**     changed date handling to be based on 01-01-1900
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2012 by Anton Scheffer
@@ -220,14 +221,14 @@ THE SOFTWARE.
     , p_theme pls_integer := 1
     , p_underline boolean := false
     , p_italic boolean := false
-    , p_bold boolean := false
-    , p_rgb varchar2 := null -- this is a hex ALPHA Red Green Blue value
+    , p_bold boolean := FALSE
+    , p_rgb varchar2 := null -- this is a hex ALPHA Red Green Blue value, but RGB works also
     )
   return pls_integer;
 --
   function get_fill
-    ( p_patternType varchar2
-    , p_fgRGB varchar2 := null -- this is a hex ALPHA Red Green Blue value
+    ( p_patternType VARCHAR2
+    , p_fgRGB varchar2 := null -- this is a hex ALPHA Red Green Blue value, but RGB works also
     )
   return pls_integer;
 --
