@@ -319,6 +319,17 @@ IS
   end;
 --
 
+  FUNCTION OraDateToExcel (p_value IN DATE)
+    RETURN NUMBER
+  AS
+    l_date_diff NUMBER := 0;
+  BEGIN
+    IF TRUNC(p_value) >= to_date('01-01-1900', 'MM-DD-YYYY') THEN
+      l_date_diff := 1;
+    END IF;
+    RETURN (TRUNC(p_value) + l_date_diff) - (to_date('01-01-1900', 'MM-DD-YYYY') - 1);
+  END OraDateToExcel;
+
   FUNCTION OraNumFmt2Excel ( p_format VARCHAR2 )
     RETURN VARCHAR2
   AS
@@ -609,7 +620,7 @@ IS
     t_numFmtId pls_integer := p_numFmtId;
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
   BEGIN
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := p_value - to_date('01-01-1900','DD-MM-YYYY');
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := OraDatetoExcel(p_value);
     if t_numFmtId is null
        and not (   workbook.sheets( t_sheet ).col_fmts.exists( p_col )
                and workbook.sheets( t_sheet ).col_fmts( p_col ).numFmtId is not null

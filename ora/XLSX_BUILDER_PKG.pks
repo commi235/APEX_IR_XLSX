@@ -39,6 +39,8 @@ is
 **     Removed references to UTL_FILE
 **     query2sheet is now function returning BLOB
 **     changed date handling to be based on 01-01-1900
+**   Date: 08-04-2014 (MK)
+**     internal function for date to excel serial conversion added
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2012 by Anton Scheffer
