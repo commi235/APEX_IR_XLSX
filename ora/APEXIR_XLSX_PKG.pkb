@@ -343,7 +343,7 @@ AS
 
   PROCEDURE print_filter_header
   AS
-    l_condition_display VARCHAR2(400);
+    l_condition_display VARCHAR2(4100);
   BEGIN
     FOR rec IN (SELECT condition_type,
                        cond.condition_name,
