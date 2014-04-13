@@ -22,54 +22,45 @@ HOW TO USE
    Process Point: On Load - Before Header 
    Condition Type: Request = Expression 1  
    Expression 1: XLSX  
-   Process (replace apexir_REGION_ID with number from step above):
+   Process (replace $APEXIR_REGION_ID$ with number from step above):
 ```sql
    DECLARE
-     v_length NUMBER;
-     l_file BLOB;
+     l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
    BEGIN
-     l_file := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => apexir_REGION_ID);
-     v_length := dbms_lob.getlength(l_file);
-     OWA_UTIL.mime_header ('application/octet', FALSE);
-     HTP.p ('Content-length: ' || v_length);
-     HTP.p ( 'Content-Disposition: attachment; filename="apexir_download.xlsx"');
+     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => $APEXIR_REGION_ID$);
+     OWA_UTIL.mime_header (l_xlsx.mime_type, FALSE);
+     HTP.p ('Content-length: ' || l_xlsx.file_size);
+     HTP.p ('Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"');
      OWA_UTIL.http_header_close;
-     WPG_DOCLOAD.download_file (l_file);
+     WPG_DOCLOAD.download_file (l_xlsx.file_content);
    END;
 ``` 
 
 ###Enable download for all interactive reports in application  
-1. Create hidden item on page zero to hold interactive report id. 
-   Do not set the item to protected. 
-   We'll assume the item is called P0_APEXIR_REGION_ID in the following.
-2. Create dynamic action with two true actions.  
-   First one sets value of hidden item with javascript and second pins value into session.  
-   Javascript Code to set value of item P0_APEXIR_REGION_ID:
-   ```javascript
-   $('#apexir_REGION_ID').val().substring(1);
-   ``` 
-
-   For PL/SQL just put "NULL;" submitting item P0_APEXIR_REGION_ID 
-3. Create button on page with interactive report. 
-   Set Action to "Redirect to URL" 
-   Set Request to XLSX
-4. Create Application Process 
+1. Create an application item to hold the requestes interactive report id. 
+   We'll assume the item is called APEXIR_REGION_ID in the following.
+2. Create button on page with interactive report. 
+   Set Action to "Defined by Dynamic Action" 
+   Put following in button attributes:
+```
+   onclick="javascript:redirect('f?p=&APP_ID.:&APP_PAGE_ID.:&SESSION.:XLSX:&DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));"
+```
+   This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.
+3. Create Application Process 
    Type: PL/SQL anonymous block  
    Process Point: On Load - Before Header 
    Condition Type: Request = Expression 1  
    Expression 1: XLSX  
-   Process (replace apexir_REGION_ID with number from step above): 
+   Process: 
 ```sql
    DECLARE
-     v_length NUMBER;
-     l_file BLOB;
+     l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
    BEGIN
-     l_file := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => :P0_APEXIR_REGION_ID);
-     v_length := dbms_lob.getlength(l_file);
-     OWA_UTIL.mime_header ('application/octet', FALSE);
-     HTP.p ('Content-length: ' || v_length);
-     HTP.p ( 'Content-Disposition: attachment; filename="apexir_download.xlsx"');
+     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => $APEXIR_REGION_ID$);
+     OWA_UTIL.mime_header (l_xlsx.mime_type, FALSE);
+     HTP.p ('Content-length: ' || l_xlsx.file_size);
+     HTP.p ('Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"');
      OWA_UTIL.http_header_close;
-     WPG_DOCLOAD.download_file (l_file);
+     WPG_DOCLOAD.download_file (l_xlsx.file_content);
    END;
 ``` 
