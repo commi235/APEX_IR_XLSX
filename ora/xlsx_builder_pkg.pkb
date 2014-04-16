@@ -903,26 +903,6 @@ IS
       );
   end;
 --
-/*
-  procedure add1xml
-    ( p_excel in out nocopy blob
-    , p_filename varchar2
-    , p_xml clob
-    )
-  is
-    t_tmp blob;
-    c_step constant number := 24396;
-  begin
-    dbms_lob.createtemporary( t_tmp, true );
-    for i in 0 .. trunc( length( p_xml ) / c_step )
-    loop
-      dbms_lob.append( t_tmp, utl_i18n.string_to_raw( substr( p_xml, i * c_step + 1, c_step ), 'AL32UTF8' ) );
-    end loop;
-    add1file( p_excel, p_filename, t_tmp );
-    dbms_lob.freetemporary( t_tmp );
-  end;
-*/
---
   procedure add1xml
     ( p_excel in out nocopy blob
     , p_filename varchar2
@@ -943,7 +923,7 @@ IS
       , dbms_lob.lobmaxsize
       , dest_offset
       , src_offset
-      ,  nls_charset_id( 'AL32UTF8'  ) 
+      , nls_charset_id( 'AL32UTF8'  ) 
       , lang_context
       , warning
       );
