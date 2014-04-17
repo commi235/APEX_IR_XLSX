@@ -14,161 +14,8 @@ IS
     RETURN workbook;
   END get_workbook;
   
---
-  function raw2num( p_raw raw, p_len integer, p_pos integer )
-  return number
-  is
-  begin
-    return utl_raw.cast_to_binary_integer( utl_raw.substr( p_raw, p_pos, p_len ), utl_raw.little_endian );
-  end;
---
-  function little_endian( p_big number, p_bytes pls_integer := 4 )
-  return raw
-  is
-  begin
-    return utl_raw.substr( utl_raw.cast_from_binary_integer( p_big, utl_raw.little_endian ), 1, p_bytes );
-  end;
---
-  function blob2num( p_blob blob, p_len integer, p_pos integer )
-  return number
-  is
-  begin
-    return utl_raw.cast_to_binary_integer( dbms_lob.substr( p_blob, p_len, p_pos ), utl_raw.little_endian );
-  end;
---
-  procedure add1file
-    ( p_zipped_blob in out blob
-    , p_name varchar2
-    , p_content blob
-    )
-  is
-    t_now date;
-    t_blob blob;
-    t_len integer;
-    t_clen integer;
-    t_crc32 raw(4) := hextoraw( '00000000' );
-    t_compressed boolean := false;
-    t_name raw(32767);
-  begin
-    t_now := sysdate;
-    t_len := nvl( dbms_lob.getlength( p_content ), 0 );
-    if t_len > 0
-    then 
-      t_blob := utl_compress.lz_compress( p_content );
-      t_clen := dbms_lob.getlength( t_blob ) - 18;
-      t_compressed := t_clen < t_len;
-      t_crc32 := dbms_lob.substr( t_blob, 4, t_clen + 11 );       
-    end if;
-    if not t_compressed
-    then 
-      t_clen := t_len;
-      t_blob := p_content;
-    end if;
-    if p_zipped_blob is null
-    then
-      dbms_lob.createtemporary( p_zipped_blob, true );
-    end if;
-    t_name := utl_i18n.string_to_raw( p_name, 'AL32UTF8' );
-    dbms_lob.append( p_zipped_blob
-                   , utl_raw.concat( c_LOCAL_FILE_HEADER -- Local file header signature
-                                   , hextoraw( '1400' )  -- version 2.0
-                                   , case when t_name = utl_i18n.string_to_raw( p_name, 'US8PC437' )
-                                       then hextoraw( '0000' ) -- no General purpose bits
-                                       else hextoraw( '0008' ) -- set Language encoding flag (EFS)
-                                     end 
-                                   , case when t_compressed
-                                        then hextoraw( '0800' ) -- deflate
-                                        else hextoraw( '0000' ) -- stored
-                                     end
-                                   , little_endian( to_number( to_char( t_now, 'ss' ) ) / 2
-                                                  + to_number( to_char( t_now, 'mi' ) ) * 32
-                                                  + to_number( to_char( t_now, 'hh24' ) ) * 2048
-                                                  , 2
-                                                  ) -- File last modification time
-                                   , little_endian( to_number( to_char( t_now, 'dd' ) )
-                                                  + to_number( to_char( t_now, 'mm' ) ) * 32
-                                                  + ( to_number( to_char( t_now, 'yyyy' ) ) - 1980 ) * 512
-                                                  , 2
-                                                  ) -- File last modification date
-                                   , t_crc32 -- CRC-32
-                                   , little_endian( t_clen )                      -- compressed size
-                                   , little_endian( t_len )                       -- uncompressed size
-                                   , little_endian( utl_raw.length( t_name ), 2 ) -- File name length
-                                   , hextoraw( '0000' )                           -- Extra field length
-                                   , t_name                                       -- File name
-                                   )
-                   );
-    if t_compressed
-    then                   
-      dbms_lob.copy( p_zipped_blob, t_blob, t_clen, dbms_lob.getlength( p_zipped_blob ) + 1, 11 ); -- compressed content
-    elsif t_clen > 0
-    then                   
-      dbms_lob.copy( p_zipped_blob, t_blob, t_clen, dbms_lob.getlength( p_zipped_blob ) + 1, 1 ); --  content
-    end if;
-    if dbms_lob.istemporary( t_blob ) = 1
-    then      
-      dbms_lob.freetemporary( t_blob );
-    end if;
-  end;
---
-  procedure finish_zip( p_zipped_blob in out blob )
-  is
-    t_cnt pls_integer := 0;
-    t_offs integer;
-    t_offs_dir_header integer;
-    t_offs_end_header integer;
-    t_comment raw(32767) := utl_raw.cast_to_raw( 'Implementation by Anton Scheffer' );
-  begin
-    t_offs_dir_header := dbms_lob.getlength( p_zipped_blob );
-    t_offs := 1;
-    while dbms_lob.substr( p_zipped_blob, utl_raw.length( c_LOCAL_FILE_HEADER ), t_offs ) = c_LOCAL_FILE_HEADER
-    loop
-      t_cnt := t_cnt + 1;
-      dbms_lob.append( p_zipped_blob
-                     , utl_raw.concat( hextoraw( '504B0102' )      -- Central directory file header signature
-                                     , hextoraw( '1400' )          -- version 2.0
-                                     , dbms_lob.substr( p_zipped_blob, 26, t_offs + 4 )
-                                     , hextoraw( '0000' )          -- File comment length
-                                     , hextoraw( '0000' )          -- Disk number where file starts
-                                     , hextoraw( '0000' )          -- Internal file attributes => 
-                                                                   --     0000 binary file
-                                                                   --     0100 (ascii)text file
-                                     , case
-                                         when dbms_lob.substr( p_zipped_blob
-                                                             , 1
-                                                             , t_offs + 30 + blob2num( p_zipped_blob, 2, t_offs + 26 ) - 1
-                                                             ) in ( hextoraw( '2F' ) -- /
-                                                                  , hextoraw( '5C' ) -- \
-                                                                  )
-                                         then hextoraw( '10000000' ) -- a directory/folder
-                                         else hextoraw( '2000B681' ) -- a file
-                                       end                         -- External file attributes
-                                     , little_endian( t_offs - 1 ) -- Relative offset of local file header
-                                     , dbms_lob.substr( p_zipped_blob
-                                                      , blob2num( p_zipped_blob, 2, t_offs + 26 )
-                                                      , t_offs + 30
-                                                      )            -- File name
-                                     )
-                     );
-      t_offs := t_offs + 30 + blob2num( p_zipped_blob, 4, t_offs + 18 )  -- compressed size
-                            + blob2num( p_zipped_blob, 2, t_offs + 26 )  -- File name length 
-                            + blob2num( p_zipped_blob, 2, t_offs + 28 ); -- Extra field length
-    end loop;
-    t_offs_end_header := dbms_lob.getlength( p_zipped_blob );
-    dbms_lob.append( p_zipped_blob
-                   , utl_raw.concat( c_END_OF_CENTRAL_DIRECTORY                                -- End of central directory signature
-                                   , hextoraw( '0000' )                                        -- Number of this disk
-                                   , hextoraw( '0000' )                                        -- Disk where central directory starts
-                                   , little_endian( t_cnt, 2 )                                 -- Number of central directory records on this disk
-                                   , little_endian( t_cnt, 2 )                                 -- Total number of central directory records
-                                   , little_endian( t_offs_end_header - t_offs_dir_header )    -- Size of central directory
-                                   , little_endian( t_offs_dir_header )                        -- Offset of start of central directory, relative to start of archive
-                                   , little_endian( nvl( utl_raw.length( t_comment ), 0 ), 2 ) -- ZIP file comment length
-                                   , t_comment
-                                   )
-                   );
-  end;
---
+  /* Private API */
+
   function alfan_col( p_col pls_integer )
   return varchar2
   is
@@ -903,34 +750,6 @@ IS
       );
   end;
 --
-  procedure add1xml
-    ( p_excel in out nocopy blob
-    , p_filename varchar2
-    , p_xml clob
-    )
-  is
-    t_tmp blob;
-    dest_offset integer := 1;
-    src_offset integer := 1;
-    lang_context integer;
-    warning integer;
-  begin
-    lang_context := dbms_lob.DEFAULT_LANG_CTX;
-    dbms_lob.createtemporary( t_tmp, true );
-    dbms_lob.converttoblob
-      ( t_tmp
-      , p_xml
-      , dbms_lob.lobmaxsize
-      , dest_offset
-      , src_offset
-      , nls_charset_id( 'AL32UTF8'  ) 
-      , lang_context
-      , warning
-      );
-    add1file( p_excel, p_filename, t_tmp );
-    dbms_lob.freetemporary( t_tmp );
-  end;
---
   function finish
   return blob
   is
@@ -978,7 +797,7 @@ ts timestamp := systimestamp;
     end loop;
     t_xxx := t_xxx || '
 </Types>';
-    add1xml( t_excel, '[Content_Types].xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, '[Content_Types].xml', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <dc:creator>' || sys_context( 'userenv', 'os_user' ) || '</dc:creator>
@@ -986,7 +805,7 @@ ts timestamp := systimestamp;
 <dcterms:created xsi:type="dcterms:W3CDTF">' || to_char( current_timestamp, 'yyyy-mm-dd"T"hh24:mi:ssTZH:TZM' ) || '</dcterms:created>
 <dcterms:modified xsi:type="dcterms:W3CDTF">' || to_char( current_timestamp, 'yyyy-mm-dd"T"hh24:mi:ssTZH:TZM' ) || '</dcterms:modified>
 </cp:coreProperties>';
-    add1xml( t_excel, 'docProps/core.xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'docProps/core.xml', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
 <Application>Microsoft Excel</Application>
@@ -1016,14 +835,14 @@ ts timestamp := systimestamp;
 <HyperlinksChanged>false</HyperlinksChanged>
 <AppVersion>14.0300</AppVersion>
 </Properties>';
-    add1xml( t_excel, 'docProps/app.xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'docProps/app.xml', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>';
-    add1xml( t_excel, '_rels/.rels', t_xxx );
+    zip_util_pkg.add_file( t_excel, '_rels/.rels', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x14ac" xmlns:x14ac="http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac">';
     if workbook.numFmts.count() > 0
@@ -1104,7 +923,7 @@ ts timestamp := systimestamp;
 </ext>
 </extLst>
 </styleSheet>';
-    add1xml( t_excel, 'xl/styles.xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'xl/styles.xml', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <fileVersion appName="xl" lastEdited="5" lowestEdited="5" rupBuild="9302"/>
@@ -1132,7 +951,7 @@ ts timestamp := systimestamp;
       t_xxx := t_xxx || '</definedNames>';
     end if;
     t_xxx := t_xxx || '<calcPr calcId="144525"/></workbook>';
-    add1xml( t_excel, 'xl/workbook.xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'xl/workbook.xml', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
 <a:themeElements>
@@ -1416,7 +1235,7 @@ ts timestamp := systimestamp;
 <a:objectDefaults/>
 <a:extraClrSchemeLst/>
 </a:theme>';
-    add1xml( t_excel, 'xl/theme/theme1.xml', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'xl/theme/theme1.xml', t_xxx );
     for s in 1 .. workbook.sheets.count()
     loop
       t_col_min := 16384;
@@ -1574,7 +1393,7 @@ ts timestamp := systimestamp;
       end if;
 --
       t_xxx := t_xxx || '</worksheet>';
-      add1xml( t_excel, 'xl/worksheets/sheet' || s || '.xml', t_xxx );
+      zip_util_pkg.add_file( t_excel, 'xl/worksheets/sheet' || s || '.xml', t_xxx );
       if workbook.sheets( s ).hyperlinks.count() > 0 or workbook.sheets( s ).comments.count() > 0
       then
         t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1589,7 +1408,7 @@ ts timestamp := systimestamp;
           t_xxx := t_xxx || '<Relationship Id="rId' || h || '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="' || workbook.sheets( s ).hyperlinks( h ).url || '" TargetMode="External"/>';
         end loop;
         t_xxx := t_xxx || '</Relationships>';
-        add1xml( t_excel, 'xl/worksheets/_rels/sheet' || s || '.xml.rels', t_xxx );
+        zip_util_pkg.add_file( t_excel, 'xl/worksheets/_rels/sheet' || s || '.xml.rels', t_xxx );
       end if;
 --
       if workbook.sheets( s ).comments.count() > 0
@@ -1633,7 +1452,7 @@ ts timestamp := systimestamp;
 ' end || workbook.sheets( s ).comments( c ).text || '</t></r></text></comment>';
         end loop;
         t_xxx := t_xxx || '</commentList></comments>';
-        add1xml( t_excel, 'xl/comments' || s || '.xml', t_xxx );
+        zip_util_pkg.add_file( t_excel, 'xl/comments' || s || '.xml', t_xxx );
         t_xxx := '<xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="2"/></o:shapelayout>
 <v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>';
@@ -1668,7 +1487,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
             ( workbook.sheets( s ).comments( c ).column - 1 ) || '</x:Column></x:ClientData></v:shape>' );
         end loop;
         t_xxx := t_xxx || '</xml>';
-        add1xml( t_excel, 'xl/drawings/vmlDrawing' || s || '.vml', t_xxx );
+        zip_util_pkg.add_file( t_excel, 'xl/drawings/vmlDrawing' || s || '.vml', t_xxx );
       end if;
 --
     end loop;
@@ -1683,7 +1502,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
 <Relationship Id="rId' || ( 9 + s ) || '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' || s || '.xml"/>';
     end loop;
     t_xxx := t_xxx || '</Relationships>';
-    add1xml( t_excel, 'xl/_rels/workbook.xml.rels', t_xxx );
+    zip_util_pkg.add_file( t_excel, 'xl/_rels/workbook.xml.rels', t_xxx );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' || workbook.str_cnt || '" uniqueCount="' || workbook.strings.count() || '">';
     t_tmp := null;
@@ -1698,8 +1517,8 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       t_tmp := t_tmp || t_str;
     end loop;
     t_xxx := t_xxx || t_tmp || '</sst>';
-    add1xml( t_excel, 'xl/sharedStrings.xml', t_xxx );
-    finish_zip( t_excel );
+    zip_util_pkg.add_file( t_excel, 'xl/sharedStrings.xml', t_xxx );
+    zip_util_pkg.finish_zip( t_excel );
     clear_workbook;
     return t_excel;
   end;

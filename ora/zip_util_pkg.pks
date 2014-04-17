@@ -24,6 +24,11 @@ AS
 
   /* API */
 
+  FUNCTION little_endian( p_big IN NUMBER
+                        , p_bytes IN pls_integer := 4
+                        )
+    RETURN RAW;
+
   FUNCTION get_file_list( p_zipped_blob IN BLOB
                         , p_encoding IN VARCHAR2 := NULL /* Use CP850 for zip files created with a German Winzip to see umlauts, etc */
                         )
@@ -41,6 +46,12 @@ AS
                     )
   ;
 
+  PROCEDURE add_file( p_zipped_blob IN OUT NOCOPY BLOB
+                    , p_name IN VARCHAR2
+                    , p_content CLOB
+                    )
+  ;
+  
   PROCEDURE finish_zip( p_zipped_blob IN OUT NOCOPY BLOB);
   
 END zip_util_pkg;

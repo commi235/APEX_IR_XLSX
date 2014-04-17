@@ -21,7 +21,6 @@ is
   c_max_length CONSTANT PLS_INTEGER := 32767;
   c_file_comment CONSTANT RAW(32767) := 'Implementation by Anton Scheffer';
 
-  /* Private API */
   FUNCTION little_endian( p_big IN NUMBER
                         , p_bytes IN pls_integer := 4
                         )
@@ -117,8 +116,6 @@ is
                                    )
                   );
   END raw2num;
-
-  /* Public API */
 
   FUNCTION get_file_list( p_zipped_blob IN BLOB
                         , p_encoding IN VARCHAR2 := NULL
@@ -275,7 +272,32 @@ is
                  );  -- compressed content
     dbms_lob.freetemporary( l_new_file );
   END add_file;
---
+
+  PROCEDURE add_file( p_zipped_blob IN OUT NOCOPY BLOB
+                    , p_name IN VARCHAR2
+                    , p_content CLOB
+                    )
+  AS
+    l_tmp BLOB;
+    dest_offset integer := 1;
+    src_offset INTEGER := 1;
+    l_warning INTEGER;
+    l_lang_ctx INTEGER := dbms_lob.DEFAULT_LANG_CTX;
+  BEGIN
+    dbms_lob.createtemporary( l_tmp, true );
+    dbms_lob.converttoblob( l_tmp
+                          , p_content
+                          , dbms_lob.lobmaxsize
+                          , dest_offset
+                          , src_offset
+                          , nls_charset_id( 'AL32UTF8' ) 
+                          , l_lang_ctx
+                          , l_warning
+                          );
+    add_file( p_zipped_blob, p_name, l_tmp );
+    dbms_lob.freetemporary( l_tmp );
+  END add_file;
+
   PROCEDURE finish_zip( p_zipped_blob IN OUT NOCOPY BLOB )
   AS
     l_cnt pls_integer := 0;
