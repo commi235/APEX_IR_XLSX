@@ -99,6 +99,7 @@ AS
     , date_tab dbms_sql.date_table
     , num_tab dbms_sql.number_table
     , vc_tab dbms_sql.varchar2_table
+    , clob_tab dbms_sql.clob_table
     , break_rows t_break_rows
     );
   TYPE t_returnvalue IS RECORD

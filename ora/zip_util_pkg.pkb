@@ -19,7 +19,7 @@ is
 
   /* Constants */
   c_max_length CONSTANT PLS_INTEGER := 32767;
-  c_file_comment CONSTANT RAW(32767) := 'Implementation by Anton Scheffer';
+  c_file_comment CONSTANT RAW(32767) := utl_raw.cast_to_raw('Implementation by Anton Scheffer');
 
   FUNCTION little_endian( p_big IN NUMBER
                         , p_bytes IN pls_integer := 4
