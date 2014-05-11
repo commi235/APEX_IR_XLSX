@@ -1,5 +1,6 @@
-CREATE OR REPLACE PACKAGE "XLSX_BUILDER_PKG" 
-is
+CREATE OR REPLACE PACKAGE "XLSX_BUILDER_PKG"
+  AUTHID CURRENT_USER
+IS
 /**********************************************
 **
 ** Author: Anton Scheffer
@@ -65,78 +66,79 @@ THE SOFTWARE.
 
 ******************************************************************************
 ******************************************** */
---
-  type tp_alignment is record
-    ( vertical varchar2(11)
-    , horizontal varchar2(16)
-    , wrapText boolean
-    );
---
-  c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
-  c_END_OF_CENTRAL_DIRECTORY constant raw(4) := hextoraw( '504B0506' ); -- End of central directory signature
---
-  type tp_XF_fmt is record
-    ( numFmtId pls_integer
-    , fontId pls_integer
-    , fillId pls_integer
-    , borderId pls_integer
+
+  TYPE tp_alignment IS RECORD
+    ( vertical VARCHAR2(11)
+    , horizontal VARCHAR2(16)
+    , wrapText BOOLEAN
+    )
+  ;
+
+  TYPE tp_XF_fmt IS RECORD
+    ( numFmtId PLS_INTEGER
+    , fontId PLS_INTEGER
+    , fillId PLS_INTEGER
+    , borderId PLS_INTEGER
     , alignment tp_alignment
     );
-  type tp_col_fmts is table of tp_XF_fmt index by pls_integer;
-  type tp_row_fmts is table of tp_XF_fmt index by pls_integer;
-  type tp_widths is table of number index by pls_integer;
-  type tp_cell is record
-    ( value number
-    , style varchar2(50)
+  TYPE tp_col_fmts IS TABLE OF tp_XF_fmt INDEX BY PLS_INTEGER;
+  TYPE tp_row_fmts IS TABLE OF tp_XF_fmt INDEX BY PLS_INTEGER;
+  TYPE tp_widths IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
+  
+  TYPE tp_cell IS RECORD
+    ( value_id NUMBER
+    , style_def VARCHAR2(50)
     );
-  type tp_cells is table of tp_cell index by pls_integer;
-  type tp_rows is table of tp_cells index by pls_integer;
-  type tp_autofilter is record
-    ( column_start pls_integer
-    , column_end pls_integer
-    , row_start pls_integer
-    , row_end pls_integer
+
+  TYPE tp_cells IS TABLE OF tp_cell INDEX BY PLS_INTEGER;
+  TYPE tp_rows IS TABLE OF tp_cells INDEX BY PLS_INTEGER;
+
+  TYPE tp_autofilter IS RECORD
+    ( column_start PLS_INTEGER
+    , column_end PLS_INTEGER
+    , row_start PLS_INTEGER
+    , row_end PLS_INTEGER
     );
-  type tp_autofilters is table of tp_autofilter index by pls_integer;
-  type tp_hyperlink is record
-    ( cell varchar2(10)
-    , url  varchar2(1000)
+  TYPE tp_autofilters IS TABLE OF tp_autofilter INDEX BY PLS_INTEGER;
+  TYPE tp_hyperlink IS RECORD
+    ( cell VARCHAR2(10)
+    , url  VARCHAR2(1000)
     );
-  type tp_hyperlinks is table of tp_hyperlink index by pls_integer;
-  subtype tp_author is varchar2(32767 char);
-  type tp_authors is table of pls_integer index by tp_author;
+  TYPE tp_hyperlinks IS TABLE OF tp_hyperlink INDEX BY PLS_INTEGER;
+  subtype tp_author IS VARCHAR2(32767 CHAR);
+  type tp_authors is table of PLS_INTEGER index by tp_author;
   authors tp_authors;
   type tp_comment is record
-    ( text varchar2(32767 char)
+    ( text VARCHAR2(32767 char)
     , author tp_author
-    , row pls_integer
-    , column pls_integer
-    , width pls_integer
-    , height pls_integer
+    , row PLS_INTEGER
+    , column PLS_INTEGER
+    , width PLS_INTEGER
+    , height PLS_INTEGER
     );
-  type tp_comments is table of tp_comment index by pls_integer;
-  type tp_mergecells is table of varchar2(21) index by pls_integer;
+  type tp_comments is table of tp_comment index by PLS_INTEGER;
+  type tp_mergecells is table of VARCHAR2(21) index by PLS_INTEGER;
   type tp_validation is record
-    ( type varchar2(10)
-    , errorstyle varchar2(32)
+    ( type VARCHAR2(10)
+    , errorstyle VARCHAR2(32)
     , showinputmessage boolean
-    , prompt varchar2(32767 char)
-    , title varchar2(32767 char)
-    , error_title varchar2(32767 char)
-    , error_txt varchar2(32767 char)
+    , prompt VARCHAR2(32767 char)
+    , title VARCHAR2(32767 char)
+    , error_title VARCHAR2(32767 char)
+    , error_txt VARCHAR2(32767 char)
     , showerrormessage boolean
-    , formula1 varchar2(32767 char)
-    , formula2 varchar2(32767 char)
+    , formula1 VARCHAR2(32767 char)
+    , formula2 VARCHAR2(32767 char)
     , allowBlank boolean
-    , sqref varchar2(32767 char)
+    , sqref VARCHAR2(32767 char)
     );
-  type tp_validations is table of tp_validation index by pls_integer;
+  type tp_validations is table of tp_validation index by PLS_INTEGER;
   type tp_sheet is record
     ( rows tp_rows
     , widths tp_widths
-    , name varchar2(100)
-    , freeze_rows pls_integer
-    , freeze_cols pls_integer
+    , name VARCHAR2(100)
+    , freeze_rows PLS_INTEGER
+    , freeze_cols PLS_INTEGER
     , autofilters tp_autofilters
     , hyperlinks tp_hyperlinks
     , col_fmts tp_col_fmts
@@ -145,50 +147,50 @@ THE SOFTWARE.
     , mergecells tp_mergecells
     , validations tp_validations
     );
-  type tp_sheets is table of tp_sheet index by pls_integer;
+  type tp_sheets is table of tp_sheet index by PLS_INTEGER;
   type tp_numFmt is record
-    ( numFmtId pls_integer
-    , formatCode varchar2(100)
+    ( numFmtId PLS_INTEGER
+    , formatCode VARCHAR2(100)
     );
-  type tp_numFmts is table of tp_numFmt index by pls_integer;
+  type tp_numFmts is table of tp_numFmt index by PLS_INTEGER;
   type tp_fill is record
-    ( patternType varchar2(30)
-    , fgRGB varchar2(8)
+    ( patternType VARCHAR2(30)
+    , fgRGB VARCHAR2(8)
     );
-  type tp_fills is table of tp_fill index by pls_integer;
-  type tp_cellXfs is table of tp_xf_fmt index by pls_integer;
+  type tp_fills is table of tp_fill index by PLS_INTEGER;
+  type tp_cellXfs is table of tp_xf_fmt index by PLS_INTEGER;
   type tp_font is record
-    ( name varchar2(100)
-    , family pls_integer
+    ( name VARCHAR2(100)
+    , family PLS_INTEGER
     , fontsize number
-    , theme pls_integer
-    , RGB varchar2(8)
+    , theme PLS_INTEGER
+    , RGB VARCHAR2(8)
     , underline boolean
     , italic boolean
     , bold boolean
     );
-  type tp_fonts is table of tp_font index by pls_integer;
+  type tp_fonts is table of tp_font index by PLS_INTEGER;
   type tp_border is record
-    ( top varchar2(17)
-    , bottom varchar2(17)
-    , left varchar2(17)
-    , right varchar2(17)
+    ( top VARCHAR2(17)
+    , bottom VARCHAR2(17)
+    , left VARCHAR2(17)
+    , right VARCHAR2(17)
     );
-  type tp_borders is table of tp_border index by pls_integer;
-  type tp_numFmtIndexes is table of pls_integer index by pls_integer;
-  type tp_strings is table of pls_integer index by varchar2(32767 char);
-  type tp_str_ind is table of varchar2(32767 char) index by pls_integer;
+  type tp_borders is table of tp_border index by PLS_INTEGER;
+  type tp_numFmtIndexes is table of PLS_INTEGER index by PLS_INTEGER;
+  type tp_strings is table of PLS_INTEGER index by VARCHAR2(32767 char);
+  type tp_str_ind is table of VARCHAR2(32767 char) index by PLS_INTEGER;
   type tp_defined_name is record
-    ( name varchar2(32767 char)
-    , ref varchar2(32767 char)
-    , sheet pls_integer
+    ( name VARCHAR2(32767 char)
+    , ref VARCHAR2(32767 char)
+    , sheet PLS_INTEGER
     );
-  type tp_defined_names is table of tp_defined_name index by pls_integer;
+  type tp_defined_names is table of tp_defined_name index by PLS_INTEGER;
   type tp_book is record
     ( sheets tp_sheets
     , strings tp_strings
     , str_ind tp_str_ind
-    , str_cnt pls_integer := 0
+    , str_cnt PLS_INTEGER := 0
     , fonts tp_fonts
     , fills tp_fills
     , borders tp_borders
@@ -201,44 +203,44 @@ THE SOFTWARE.
   FUNCTION get_workbook
     RETURN tp_book;
     
-  procedure clear_workbook;
+  PROCEDURE clear_workbook;
 --
   FUNCTION new_sheet( p_sheetname VARCHAR2 := NULL )
     RETURN PLS_INTEGER;
 --
-  function OraFmt2Excel( p_format varchar2 := null )
-  return varchar2;
+  function OraFmt2Excel( p_format VARCHAR2 := NULL )
+  return VARCHAR2;
 --
 
   FUNCTION OraNumFmt2Excel ( p_format VARCHAR2 )
     RETURN VARCHAR2;
     
-  function get_numFmt( p_format varchar2 := null )
-  return pls_integer;
+  function get_numFmt( p_format VARCHAR2 := NULL )
+  return PLS_INTEGER;
 --
   function get_font
-    ( p_name varchar2
-    , p_family pls_integer := 2
+    ( p_name VARCHAR2
+    , p_family PLS_INTEGER := 2
     , p_fontsize number := 8
-    , p_theme pls_integer := 1
+    , p_theme PLS_INTEGER := 1
     , p_underline boolean := false
     , p_italic boolean := false
     , p_bold boolean := FALSE
-    , p_rgb varchar2 := null -- this is a hex ALPHA Red Green Blue value, but RGB works also
+    , p_rgb VARCHAR2 := NULL -- this is a hex ALPHA Red Green Blue value, but RGB works also
     )
-  return pls_integer;
+  return PLS_INTEGER;
 --
   function get_fill
     ( p_patternType VARCHAR2
-    , p_fgRGB varchar2 := null -- this is a hex ALPHA Red Green Blue value, but RGB works also
+    , p_fgRGB VARCHAR2 := NULL -- this is a hex ALPHA Red Green Blue value, but RGB works also
     )
-  return pls_integer;
+  return PLS_INTEGER;
 --
   function get_border
-    ( p_top varchar2 := 'thin'
-    , p_bottom varchar2 := 'thin'
-    , p_left varchar2 := 'thin'
-    , p_right varchar2 := 'thin'
+    ( p_top VARCHAR2 := 'thin'
+    , p_bottom VARCHAR2 := 'thin'
+    , p_left VARCHAR2 := 'thin'
+    , p_right VARCHAR2 := 'thin'
     )
 /*
 none
@@ -256,12 +258,12 @@ dashDotDot
 mediumDashDotDot
 slantDashDot
 */
-  return pls_integer;
+  return PLS_INTEGER;
 --
   function get_alignment
-    ( p_vertical varchar2 := null
-    , p_horizontal varchar2 := null
-    , p_wrapText boolean := null
+    ( p_vertical VARCHAR2 := NULL
+    , p_horizontal VARCHAR2 := NULL
+    , p_wrapText boolean := NULL
     )
 /* horizontal
 center
@@ -282,170 +284,171 @@ top
 */
   return tp_alignment;
 --
-  procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
+  PROCEDURE cell
+    ( p_col PLS_INTEGER
+    , p_row PLS_INTEGER
     , p_value number
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
-    , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+    , p_numFmtId PLS_INTEGER := NULL
+    , p_fontId PLS_INTEGER := NULL
+    , p_fillId PLS_INTEGER := NULL
+    , p_borderId PLS_INTEGER := NULL
+    , p_alignment tp_alignment := NULL
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
-    , p_value varchar2
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
-    , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+  PROCEDURE cell
+    ( p_col PLS_INTEGER
+    , p_row PLS_INTEGER
+    , p_value VARCHAR2
+    , p_numFmtId PLS_INTEGER := NULL
+    , p_fontId PLS_INTEGER := NULL
+    , p_fillId PLS_INTEGER := NULL
+    , p_borderId PLS_INTEGER := NULL
+    , p_alignment tp_alignment := NULL
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
+  PROCEDURE cell
+    ( p_col PLS_INTEGER
+    , p_row PLS_INTEGER
     , p_value date
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
-    , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+    , p_numFmtId PLS_INTEGER := NULL
+    , p_fontId PLS_INTEGER := NULL
+    , p_fillId PLS_INTEGER := NULL
+    , p_borderId PLS_INTEGER := NULL
+    , p_alignment tp_alignment := NULL
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure hyperlink
-    ( p_col pls_integer
-    , p_row pls_integer
-    , p_url varchar2
-    , p_value varchar2 := null
-    , p_sheet pls_integer := null
+  PROCEDURE hyperlink
+    ( p_col PLS_INTEGER
+    , p_row PLS_INTEGER
+    , p_url VARCHAR2
+    , p_value VARCHAR2 := NULL
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure comment
-    ( p_col pls_integer
-    , p_row pls_integer
-    , p_text varchar2
-    , p_author varchar2 := null
-    , p_width pls_integer := 150  -- pixels
-    , p_height pls_integer := 100  -- pixels
-    , p_sheet pls_integer := null
+  PROCEDURE comment
+    ( p_col PLS_INTEGER
+    , p_row PLS_INTEGER
+    , p_text VARCHAR2
+    , p_author VARCHAR2 := NULL
+    , p_width PLS_INTEGER := 150  -- pixels
+    , p_height PLS_INTEGER := 100  -- pixels
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure mergecells
-    ( p_tl_col pls_integer -- top left
-    , p_tl_row pls_integer
-    , p_br_col pls_integer -- bottom right
-    , p_br_row pls_integer
-    , p_sheet pls_integer := null
+  PROCEDURE mergecells
+    ( p_tl_col PLS_INTEGER -- top left
+    , p_tl_row PLS_INTEGER
+    , p_br_col PLS_INTEGER -- bottom right
+    , p_br_row PLS_INTEGER
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure list_validation
-    ( p_sqref_col pls_integer
-    , p_sqref_row pls_integer
-    , p_tl_col pls_integer -- top left
-    , p_tl_row pls_integer
-    , p_br_col pls_integer -- bottom right
-    , p_br_row pls_integer
-    , p_style varchar2 := 'stop' -- stop, warning, information
-    , p_title varchar2 := null
-    , p_prompt varchar := null
+  PROCEDURE list_validation
+    ( p_sqref_col PLS_INTEGER
+    , p_sqref_row PLS_INTEGER
+    , p_tl_col PLS_INTEGER -- top left
+    , p_tl_row PLS_INTEGER
+    , p_br_col PLS_INTEGER -- bottom right
+    , p_br_row PLS_INTEGER
+    , p_style VARCHAR2 := 'stop' -- stop, warning, information
+    , p_title VARCHAR2 := NULL
+    , p_prompt VARCHAR2 := NULL
     , p_show_error boolean := false
-    , p_error_title varchar2 := null
-    , p_error_txt varchar2 := null
-    , p_sheet pls_integer := null
+    , p_error_title VARCHAR2 := NULL
+    , p_error_txt VARCHAR2 := NULL
+    , p_sheet PLS_INTEGER := NULL
     );
 --
-  procedure list_validation
-    ( p_sqref_col pls_integer
-    , p_sqref_row pls_integer
-    , p_defined_name varchar2
-    , p_style varchar2 := 'stop' -- stop, warning, information
-    , p_title varchar2 := null
-    , p_prompt varchar := null
-    , p_show_error boolean := false
-    , p_error_title varchar2 := null
-    , p_error_txt varchar2 := null
-    , p_sheet pls_integer := null
-    );
---
-  procedure defined_name
-    ( p_tl_col pls_integer -- top left
-    , p_tl_row pls_integer
-    , p_br_col pls_integer -- bottom right
-    , p_br_row pls_integer
-    , p_name varchar2
-    , p_sheet pls_integer := null
-    , p_localsheet pls_integer := null
-    );
---
-  procedure set_column_width
-    ( p_col pls_integer
-    , p_width number
-    , p_sheet pls_integer := null
-    );
---
-  procedure set_column
-    ( p_col pls_integer
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
-    , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
-    );
---
-  procedure set_row
-    ( p_row pls_integer
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
-    , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
-    );
---
-  procedure freeze_rows
-    ( p_nr_rows pls_integer := 1
-    , p_sheet pls_integer := null
-    );
---
-  procedure freeze_cols
-    ( p_nr_cols pls_integer := 1
-    , p_sheet pls_integer := null
-    );
---
-  procedure freeze_pane
-    ( p_col pls_integer
-    , p_row pls_integer
-    , p_sheet pls_integer := null
-    );
---
-  procedure set_autofilter
-    ( p_column_start pls_integer := null
-    , p_column_end pls_integer := null
-    , p_row_start pls_integer := null
-    , p_row_end pls_integer := null
-    , p_sheet pls_integer := null
-    );
---
-  function finish
-  return blob;
---
-  function query2sheet
-    ( p_sql varchar2
-    , p_column_headers boolean := true
-    , p_directory varchar2 := null
-    , p_filename varchar2 := null
-    , p_sheet pls_integer := null
-    )
-  return blob;
---
+  PROCEDURE list_validation ( p_sqref_col PLS_INTEGER
+                            , p_sqref_row PLS_INTEGER
+                            , p_defined_name VARCHAR2
+                            , p_style VARCHAR2 := 'stop' -- stop, warning, information
+                            , p_title VARCHAR2 := NULL
+                            , p_prompt VARCHAR2 := NULL
+                            , p_show_error boolean := FALSE
+                            , p_error_title VARCHAR2 := NULL
+                            , p_error_txt VARCHAR2 := NULL
+                            , p_sheet PLS_INTEGER := NULL
+                            )
+  ;
 
-end;
+  PROCEDURE defined_name ( p_tl_col PLS_INTEGER -- top left
+                         , p_tl_row PLS_INTEGER
+                         , p_br_col PLS_INTEGER -- bottom right
+                         , p_br_row PLS_INTEGER
+                         , p_name VARCHAR2
+                         , p_sheet PLS_INTEGER := NULL
+                         , p_localsheet PLS_INTEGER := NULL
+                         )
+  ;
+
+  PROCEDURE set_column_width ( p_col PLS_INTEGER
+                             , p_width NUMBER
+                             , p_sheet PLS_INTEGER := NULL
+                             )
+  ;
+
+  PROCEDURE set_column ( p_col PLS_INTEGER
+                       , p_numFmtId PLS_INTEGER := NULL
+                       , p_fontId PLS_INTEGER := NULL
+                       , p_fillId PLS_INTEGER := NULL
+                       , p_borderId PLS_INTEGER := NULL
+                       , p_alignment tp_alignment := NULL
+                       , p_sheet PLS_INTEGER := NULL
+                       )
+  ;
+
+  PROCEDURE set_row ( p_row PLS_INTEGER
+                    , p_numFmtId PLS_INTEGER := NULL
+                    , p_fontId PLS_INTEGER := NULL
+                    , p_fillId PLS_INTEGER := NULL
+                    , p_borderId PLS_INTEGER := NULL
+                    , p_alignment tp_alignment := NULL
+                    , p_sheet PLS_INTEGER := NULL
+                    )
+  ;
+
+  PROCEDURE freeze_rows ( p_nr_rows PLS_INTEGER := 1
+                        , p_sheet PLS_INTEGER := NULL
+                        )
+  ;
+
+  PROCEDURE freeze_cols ( p_nr_cols PLS_INTEGER := 1
+                        , p_sheet PLS_INTEGER := NULL
+                        )
+  ;
+
+  PROCEDURE freeze_pane ( p_col PLS_INTEGER
+                        , p_row PLS_INTEGER
+                        , p_sheet PLS_INTEGER := NULL
+                        )
+  ;
+
+  PROCEDURE set_autofilter ( p_column_start PLS_INTEGER := NULL
+                           , p_column_end PLS_INTEGER := NULL
+                           , p_row_start PLS_INTEGER := NULL
+                           , p_row_end PLS_INTEGER := NULL
+                           , p_sheet PLS_INTEGER := NULL
+                           )
+  ;
+
+  FUNCTION FINISH
+    RETURN BLOB
+  ;
+
+  FUNCTION query2sheet ( p_sql VARCHAR2
+                       , p_column_headers boolean := TRUE
+                       , p_directory VARCHAR2 := NULL
+                       , p_filename VARCHAR2 := NULL
+                       , p_sheet PLS_INTEGER := NULL
+                       )
+    RETURN BLOB
+  ;
+
+
+END;
 
 /

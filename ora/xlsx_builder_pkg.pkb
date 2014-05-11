@@ -2,7 +2,9 @@ CREATE OR REPLACE PACKAGE BODY "XLSX_BUILDER_PKG"
 IS
 
   /* Constants */
-  
+
+  c_local_file_header        CONSTANT RAW(4) := hextoraw( '504B0304' ); -- Local file header signature
+  c_end_of_central_directory CONSTANT RAW(4) := hextoraw( '504B0506' ); -- End of central directory signature  
 
   /* Globals */
   workbook tp_book;
@@ -422,10 +424,10 @@ IS
     )
   is
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
-  begin
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := p_value;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := null;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment );
+  BEGIN
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value_id := p_value;
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style_def := NULL;
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style_def := get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment );
   end;
 --
 
@@ -443,13 +445,13 @@ IS
   is
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
     t_alignment tp_alignment := p_alignment;
-  begin
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := add_string( p_value );
+  BEGIN
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value_id := add_string( p_value );
     if t_alignment.wrapText is null and instr( p_value, chr(13) ) > 0
     then
       t_alignment.wrapText := true;
-    end if;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 't="s" ' || get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, t_alignment );
+    END IF;
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style_def := 't="s" ' || get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, t_alignment );
   end;
 --
   procedure cell
@@ -467,7 +469,7 @@ IS
     t_numFmtId pls_integer := p_numFmtId;
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
   BEGIN
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := OraDatetoExcel(p_value);
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value_id := OraDatetoExcel(p_value);
     if t_numFmtId is null
        and not (   workbook.sheets( t_sheet ).col_fmts.exists( p_col )
                and workbook.sheets( t_sheet ).col_fmts( p_col ).numFmtId is not null
@@ -477,8 +479,8 @@ IS
                )
     then
       t_numFmtId := get_numFmt( 'dd/mm/yyyy' );
-    end if;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := get_XfId( t_sheet, p_col, p_row, t_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment );
+    END IF;
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style_def := get_XfId( t_sheet, p_col, p_row, t_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment );
   end;
 --
   procedure hyperlink
@@ -491,9 +493,9 @@ IS
   is
     t_ind pls_integer;
     t_sheet pls_integer := nvl( p_sheet, workbook.sheets.count() );
-  begin
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := add_string( nvl( p_value, p_url ) );
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 't="s" ' || get_XfId( t_sheet, p_col, p_row, '', get_font( 'Calibri', p_theme => 10, p_underline => true ) );
+  BEGIN
+    workbook.sheets( t_sheet ).ROWS( p_row )( p_col ).value_id := add_string( nvl( p_value, p_url ) );
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style_def := 't="s" ' || get_XfId( t_sheet, p_col, p_row, '', get_font( 'Calibri', p_theme => 10, p_underline => true ) );
     t_ind := workbook.sheets( t_sheet ).hyperlinks.count() + 1;
     workbook.sheets( t_sheet ).hyperlinks( t_ind ).cell := alfan_col( p_col ) || p_row;
     workbook.sheets( t_sheet ).hyperlinks( t_ind ).url := p_url;
@@ -542,8 +544,8 @@ IS
     , p_style varchar2 := 'stop' -- stop, warning, information
     , p_formula1 varchar2 := null
     , p_formula2 varchar2 := null
-    , p_title varchar2 := null
-    , p_prompt varchar := null
+    , p_title VARCHAR2 := NULL
+    , p_prompt varchar2 := null
     , p_show_error boolean := false
     , p_error_title varchar2 := null
     , p_error_txt varchar2 := null
@@ -573,12 +575,12 @@ IS
     , p_br_col pls_integer -- bottom right
     , p_br_row pls_integer
     , p_style varchar2 := 'stop' -- stop, warning, information
-    , p_title varchar2 := null
-    , p_prompt varchar := null
-    , p_show_error boolean := false
-    , p_error_title varchar2 := null
-    , p_error_txt varchar2 := null
-    , p_sheet pls_integer := null
+    , p_title VARCHAR2 := NULL
+    , p_prompt VARCHAR2 := NULL
+    , p_show_error boolean := FALSE
+    , p_error_title VARCHAR2 := NULL
+    , p_error_txt VARCHAR2 := NULL
+    , p_sheet pls_integer := NULL
     )
   is
   begin
@@ -600,8 +602,8 @@ IS
     , p_sqref_row pls_integer
     , p_defined_name varchar2
     , p_style varchar2 := 'stop' -- stop, warning, information
-    , p_title varchar2 := null
-    , p_prompt varchar := null
+    , p_title VARCHAR2 := NULL
+    , p_prompt VARCHAR2 := NULL
     , p_show_error boolean := false
     , p_error_title varchar2 := null
     , p_error_txt varchar2 := null
@@ -1295,9 +1297,9 @@ ts timestamp := systimestamp;
         while t_col_ind is not null
         loop
           t_cell := '<c r="' || alfan_col( t_col_ind ) || t_row_ind || '"'
-                 || ' ' || workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).style
+                 || ' ' || workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).style_def
                  || '><v>'
-                 || to_char( workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).value, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,' )
+                 || to_char( workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).value_id, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,' )
                  || '</v></c>';
           if t_len > 32000
           then
