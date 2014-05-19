@@ -628,7 +628,7 @@ AS
   AS
     l_aggregate_values dbms_sql.number_table;
     l_cur_aggregate_name VARCHAR2(30);
-    l_aggregate_offset PLS_INTEGER := 0;
+    l_aggregate_offset PLS_INTEGER := 1;
   BEGIN
     -- fixed order for aggregates, same as occurence in t_apexir_col type
     l_cur_aggregate_name := g_apex_ir_info.active_aggregates.FIRST();
@@ -933,7 +933,7 @@ AS
     IF g_xlsx_options.show_aggregates AND g_apex_ir_info.break_def_column IS NOT NULL THEN
       DBMS_SQL.COLUMN_VALUE( g_cursor_info.cursor_id, g_apex_ir_info.break_def_column, l_break_values);
       FOR i IN 2..p_fetched_row_cnt LOOP
-        IF l_break_values(i) != l_break_values(i-1) THEN
+        IF l_break_values.exists(i) AND l_break_values.exists(i-1) AND l_break_values(i) != l_break_values(i-1) THEN
           print_aggregate_types(i - 1 + l_cnt);
           l_cnt := l_cnt + g_apex_ir_info.active_aggregates.count;
         END IF;
