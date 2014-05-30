@@ -28,13 +28,18 @@ AS
     )
   ;
 
-  TYPE t_apex_ir_col_aggregates IS TABLE OF PLS_INTEGER INDEX BY VARCHAR2(30);
+  TYPE t_apex_ir_col_aggregate IS RECORD
+    ( col_num PLS_INTEGER
+    , last_value NUMBER
+    )
+  ;
+  TYPE t_apex_ir_col_aggregates IS TABLE OF t_apex_ir_col_aggregate INDEX BY VARCHAR2(30);
 
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
     , is_break_col BOOLEAN
-    , aggregate_col_nums t_apex_ir_col_aggregates
+    , aggregates t_apex_ir_col_aggregates
     , highlight_conds t_apex_ir_highlights
     , format_mask apex_application_page_ir_col.format_mask%TYPE
     , sql_col_num NUMBER -- defines which SQL column to check
@@ -60,6 +65,7 @@ AS
     , aggregates_offset PLS_INTEGER -- sql column offset when calculating aggregate column numbers
     , active_aggregates t_apex_ir_active_aggregates -- which types of aggregates are active ( count gives row offset )
     , aggregate_type_disp_column PLS_INTEGER := 1 -- defaults to 1, meaning aggregates active but no break columns
+    , header_offset PLS_INTEGER
     )
   ;
 
@@ -96,17 +102,21 @@ AS
   TYPE t_cursor_info IS RECORD
     ( cursor_id PLS_INTEGER
     , column_count PLS_INTEGER
+    , current_row PLS_INTEGER
     , date_tab dbms_sql.date_table
     , num_tab dbms_sql.number_table
     , vc_tab dbms_sql.varchar2_table
     , clob_tab dbms_sql.clob_table
     , break_rows t_break_rows
+    , prev_break_val VARCHAR2(32767)
     );
+    
   TYPE t_returnvalue IS RECORD
     ( file_name VARCHAR2(255)
     , file_content BLOB
     , mime_type VARCHAR2(255)
     , file_size NUMBER
     );
+    
 END APEXIR_XLSX_TYPES_PKG;
 /
