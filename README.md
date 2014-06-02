@@ -56,7 +56,7 @@ HOW TO USE
    DECLARE
      l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
    BEGIN
-     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => $APEXIR_REGION_ID$);
+     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => :APEXIR_REGION_ID);
      OWA_UTIL.mime_header (l_xlsx.mime_type, FALSE);
      HTP.p ('Content-length: ' || l_xlsx.file_size);
      HTP.p ('Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"');
