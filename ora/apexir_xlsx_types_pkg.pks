@@ -60,12 +60,11 @@ AS
     , base_report_id NUMBER -- Report ID for Request
     , report_title VARCHAR2(4000) -- Derived Report Title
     , report_definition apex_ir.t_report -- Collected using APEX function APEX_IR.GET_REPORT
-    , final_sql VARCHAR2(32767)
+    , final_sql VARCHAR2(32767) -- Final SQL statement used to get all data
     , break_def_column PLS_INTEGER -- sql column number of break definition
     , aggregates_offset PLS_INTEGER -- sql column offset when calculating aggregate column numbers
     , active_aggregates t_apex_ir_active_aggregates -- which types of aggregates are active ( count gives row offset )
     , aggregate_type_disp_column PLS_INTEGER := 1 -- defaults to 1, meaning aggregates active but no break columns
-    , header_offset PLS_INTEGER
     )
   ;
 
