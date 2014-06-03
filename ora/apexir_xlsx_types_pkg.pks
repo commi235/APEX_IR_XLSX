@@ -2,6 +2,7 @@ CREATE OR REPLACE PACKAGE "APEXIR_XLSX_TYPES_PKG"
   AUTHID CURRENT_USER
 AS 
 
+  -- Holds relevant information about enabled highlights
   TYPE t_apex_ir_highlight IS RECORD
     ( bg_color apex_application_page_ir_cond.highlight_row_color%TYPE
     , font_color apex_application_page_ir_cond.highlight_row_font_color%TYPE
@@ -35,15 +36,16 @@ AS
   ;
   TYPE t_apex_ir_col_aggregates IS TABLE OF t_apex_ir_col_aggregate INDEX BY VARCHAR2(30);
 
+  -- Holds the relevant information about a column in the interactive report.
   TYPE t_apex_ir_col IS RECORD
-    ( report_label apex_application_page_ir_col.report_label%TYPE
-    , is_visible BOOLEAN
-    , is_break_col BOOLEAN
-    , aggregates t_apex_ir_col_aggregates
-    , highlight_conds t_apex_ir_highlights
-    , format_mask apex_application_page_ir_col.format_mask%TYPE
+    ( report_label apex_application_page_ir_col.report_label%TYPE -- Column heading
+    , is_visible BOOLEAN -- Defines if column should be visible in XLSX file
+    , is_break_col BOOLEAN -- Defines if column is used to determine control break
+    , aggregates t_apex_ir_col_aggregates -- Aggregates defined on the column
+    , highlight_conds t_apex_ir_highlights -- Highlights defined on the column
+    , format_mask apex_application_page_ir_col.format_mask%TYPE -- Format mask
     , sql_col_num NUMBER -- defines which SQL column to check
-    , display_column PLS_INTEGER
+    , display_column PLS_INTEGER -- Column number in XLSX file
     )
   ;
   
@@ -51,6 +53,7 @@ AS
   
   TYPE t_apex_ir_active_aggregates IS TABLE OF BOOLEAN INDEX BY VARCHAR2(30);
 
+  -- Holds general information regarding the interactive report.
   TYPE t_apex_ir_info IS RECORD
     ( application_id NUMBER -- Application ID IR belongs to
     , page_id NUMBER -- Page ID IR belongs to
@@ -68,6 +71,7 @@ AS
     )
   ;
 
+  -- Holds the selected options and calculated settings for the XLSX generation.
   TYPE t_xlsx_options IS RECORD
     ( show_title BOOLEAN -- Show header line with report title
     , show_filters BOOLEAN -- show header lines with filter settings
@@ -77,44 +81,47 @@ AS
     , show_aggregates BOOLEAN -- process aggregates and show on total lines
     , display_column_count NUMBER -- holds the count of displayed columns, used for merged cells in header section
     , sheet PLS_INTEGER -- holds the worksheet reference
-    , default_font VARCHAR2(100)
-    , default_border_color VARCHAR2(100)
-    , allow_wrap_text BOOLEAN
-    , original_line_break VARCHAR2(10)
-    , replace_line_break VARCHAR2(10)
-    , default_date_format VARCHAR2(100)
-    , append_date_file_name BOOLEAN
+    , default_font VARCHAR2(100) -- default font for printed values
+    , default_border_color VARCHAR2(100) -- default color if a border is shown
+    , allow_wrap_text BOOLEAN -- Switch to allow/disallow word wrap
+    , original_line_break VARCHAR2(10) -- The line break character as used in the statement
+    , replace_line_break VARCHAR2(10) -- Line break to be used in XLSX file
+    , default_date_format VARCHAR2(100) -- Default date format, taken from v$nls_parameters
+    , append_date_file_name BOOLEAN -- Append current date to file name or not
     )
   ;
-  
+
+  -- Holds column information for all selected columns.  
   TYPE t_sql_col_info IS RECORD
-    ( col_name VARCHAR2(32767)
-    , col_data_type VARCHAR2(30)
-    , col_type VARCHAR2(30)
+    ( col_name VARCHAR2(32767) -- Column alias in SQL statement
+    , col_data_type VARCHAR2(30) -- Data Type of the column
+    , col_type VARCHAR2(30) -- Internal column type, e.g. DISPLAY, ROW_HIGHLIGHT, BREAK_DEF
     , is_displayed BOOLEAN := FALSE -- assume no display, we loop through all and flag displayed then
     );
   
   TYPE t_sql_col_infos IS TABLE OF t_sql_col_info INDEX BY PLS_INTEGER;
 
   TYPE t_break_rows IS TABLE OF NUMBER INDEX BY PLS_INTEGER; --zero based break rows
-  
+
+  -- Holds general information about the opened cursor, including runtime data.  
   TYPE t_cursor_info IS RECORD
-    ( cursor_id PLS_INTEGER
-    , column_count PLS_INTEGER
-    , current_row PLS_INTEGER
+    ( cursor_id PLS_INTEGER -- ID of opened cursor
+    , column_count PLS_INTEGER -- Count of selected columns
+    , current_row PLS_INTEGER -- Current SQL row
     , date_tab dbms_sql.date_table
     , num_tab dbms_sql.number_table
     , vc_tab dbms_sql.varchar2_table
     , clob_tab dbms_sql.clob_table
-    , break_rows t_break_rows
-    , prev_break_val VARCHAR2(32767)
+    , break_rows t_break_rows -- Definition of when a break occures including respective offset
+    , prev_break_val VARCHAR2(32767) -- Previous value of break column, needed if bulk size matches break
     );
-    
+
+  -- Holds the data to return.    
   TYPE t_returnvalue IS RECORD
-    ( file_name VARCHAR2(255)
-    , file_content BLOB
-    , mime_type VARCHAR2(255)
-    , file_size NUMBER
+    ( file_name VARCHAR2(255) -- Generated filename
+    , file_content BLOB -- The XLSX file
+    , mime_type VARCHAR2(255) -- mime type to be used for download
+    , file_size NUMBER -- size of the XLSX file
     );
     
 END APEXIR_XLSX_TYPES_PKG;
