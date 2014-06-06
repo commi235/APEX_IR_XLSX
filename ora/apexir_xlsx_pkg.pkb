@@ -649,7 +649,11 @@ AS
           IF g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i) THEN
             xlsx_builder_pkg.cell( p_col => g_col_settings(p_column_name).display_column
                                  , p_row => g_current_disp_row + i + g_cursor_info.break_rows(g_current_sql_row + i) + l_aggregate_offset
-                                 , p_value => g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value --l_aggregate_values( i + l_aggregate_values.FIRST() )
+                                 , p_value => CASE
+                                                WHEN i = 0 AND g_current_sql_row > 1
+                                                  THEN g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value
+                                                ELSE l_aggregate_values( i + l_aggregate_values.FIRST() )
+                                              END
                                  , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
                                                                         , p_bold => TRUE
                                                                         )
