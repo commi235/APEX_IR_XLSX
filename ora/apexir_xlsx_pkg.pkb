@@ -141,7 +141,7 @@ AS
     l_aggregates apexir_xlsx_types_pkg.t_apex_ir_aggregates;
     l_aggregate_col_offset PLS_INTEGER;
     l_col_aggregates apexir_xlsx_types_pkg.t_apex_ir_col_aggregates;
-
+    l_break_enabled BOOLEAN := FALSE;
   BEGIN
     -- First get run-time settings for aggregate infos
     SELECT break_enabled_on,
@@ -188,6 +188,7 @@ AS
       WHILE (l_cur_col IS NOT NULL)
       LOOP
         IF l_break_on IS NOT NULL AND INSTR(l_break_on, l_cur_col) > 0 THEN
+          IF NOT l_break_enabled THEN l_break_enabled := TRUE; END IF;
           g_col_settings(l_cur_col).is_break_col := TRUE;
           IF g_col_settings(l_cur_col).is_visible THEN
             g_apex_ir_info.aggregate_type_disp_column := g_apex_ir_info.aggregate_type_disp_column + 1;
@@ -232,7 +233,7 @@ AS
     ELSE
       g_xlsx_options.show_aggregates := FALSE;
     END IF;
-    IF l_break_on IS NOT NULL THEN
+    IF l_break_enabled THEN
       g_apex_ir_info.final_sql := ', ' || RTRIM(g_apex_ir_info.final_sql, '|| ') || ' AS ' || c_break_definition;
     END IF;
   END get_aggregates;
@@ -646,7 +647,9 @@ AS
                              );
         FOR i IN 0 .. p_fetched_row_cnt - 1 loop
           last_aggr_val := g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value;
-          IF g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i) THEN
+          IF (g_apex_ir_info.aggregate_type_disp_column > 1 AND g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i))
+          OR (g_apex_ir_info.aggregate_type_disp_column = 1 AND p_fetched_row_cnt <= c_bulk_size AND i = p_fetched_row_cnt - 1) 
+          THEN
             xlsx_builder_pkg.cell( p_col => g_col_settings(p_column_name).display_column
                                  , p_row => g_current_disp_row + i + g_cursor_info.break_rows(g_current_sql_row + i) + l_aggregate_offset
                                  , p_value => CASE
@@ -702,7 +705,7 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(p_column_name).display_column THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column > g_col_settings(p_column_name).display_column THEN
         IF (i = p_fetched_row_cnt AND p_fetched_row_cnt < c_bulk_size) 
          OR g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i)
         THEN
@@ -761,7 +764,7 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(p_column_name).display_column THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column > g_col_settings(p_column_name).display_column THEN
         IF (i = p_fetched_row_cnt AND p_fetched_row_cnt < c_bulk_size) 
          OR g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i)
         THEN
@@ -820,7 +823,7 @@ AS
                                          END
                            , p_sheet => g_xlsx_options.sheet
                            );
-      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column != g_col_settings(p_column_name).display_column THEN
+      IF g_xlsx_options.show_aggregates AND g_apex_ir_info.aggregate_type_disp_column > g_col_settings(p_column_name).display_column THEN
         IF (i = p_fetched_row_cnt AND p_fetched_row_cnt < c_bulk_size) 
          OR g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i)
         THEN
@@ -975,8 +978,10 @@ AS
       FOR i IN 1..p_fetched_row_cnt LOOP
         g_cursor_info.break_rows(i) := l_cnt;
       END LOOP;
+      IF p_fetched_row_cnt < c_bulk_size AND g_xlsx_options.show_aggregates THEN
+        print_aggregate_types(p_fetched_row_cnt + l_cnt);
+      END IF;
     END IF;
-    NULL;
   END process_break_rows;
 
   PROCEDURE print_data
