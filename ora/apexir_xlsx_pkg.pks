@@ -1,6 +1,12 @@
 CREATE OR REPLACE PACKAGE "APEXIR_XLSX_PKG" 
   AUTHID CURRENT_USER
-AS 
+AS
+/**
+* Package prepares and APEX Interactive Report to be downloaded as an XLSX file.<br />
+* Takes all user and global settings and hands them over to XLSX Builder Package by Anton Scheffer.<br />
+* Retrieves generated file, amends file name, mime type and file size.
+* @headcom
+*/
 
   /** 
   * Retrieve an interactive report as an XLSX file.

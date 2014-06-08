@@ -6,7 +6,6 @@ AS
 * @headcom
 */
 
-
   /** 
   * Record with data about a single highlight definition.
   * @param bg_color        Background color to be applied

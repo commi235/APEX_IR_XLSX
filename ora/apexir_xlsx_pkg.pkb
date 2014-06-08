@@ -2,7 +2,7 @@ CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG"
 AS
 
 
-/* Constants */
+  /** Defines the bulk fetch size used by DBMS_SQL */
   c_bulk_size CONSTANT pls_integer := 200;
 
   c_col_data_type_vc CONSTANT VARCHAR2(30) := 'VARCHAR';
@@ -10,31 +10,52 @@ AS
   c_col_data_type_date CONSTANT VARCHAR2(30) := 'DATE';
   c_col_data_type_clob CONSTANT VARCHAR2(30) := 'CLOB';
 
+  /** Column type if column is normal display column */
   c_display_column CONSTANT VARCHAR2(30) := 'DISPLAY';
+  /** Column type if column is used to check for row highlight */
   c_row_highlight CONSTANT VARCHAR2(30) := 'ROW_HIGHLIGHT';
-  c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLICHT';
+  /** Column type if column is used to check for column highlight */
+  c_column_highlight CONSTANT VARCHAR2(30) := 'COLUMN_HIGHLIGHT';
+  /** Column type if column is used as control break definition */
   c_break_definition CONSTANT VARCHAR2(30) := 'BREAK_DEF';
+  /** Column type if column is holding the value of an aggregation */
   c_aggregate_column CONSTANT VARCHAR2(30) := 'AGGREGATE';
 
+  /*
+  * Standard internal APEX date format.
+  * Used to convert condition expression.
+  */
   c_apex_date_fmt CONSTANT VARCHAR2(30) := 'YYYYMMDDHH24MISS';
 
 
-/* Global Variables */
+/** Runtime Variables */
 
-  -- runtime data
+  /** Holds general info on the IR */
   g_apex_ir_info apexir_xlsx_types_pkg.t_apex_ir_info;
+  /** Holds the file generation options */
   g_xlsx_options apexir_xlsx_types_pkg.t_xlsx_options;
+  /** Holds APEX IR column settings */
   g_col_settings apexir_xlsx_types_pkg.t_apex_ir_cols;
+  /** Holds defined row highlights */
   g_row_highlights apexir_xlsx_types_pkg.t_apex_ir_highlights;
+  /** Holds all defined column highlights */
   g_col_highlights apexir_xlsx_types_pkg.t_apex_ir_highlights;
+  /** Row number of first sql row for current fetch */
   g_current_sql_row PLS_INTEGER := 1;
+  /** Row number in spreadsheet to start with for current fetch */
   g_current_disp_row PLS_INTEGER := 1;
+  /** General info about used cursor */
   g_cursor_info apexir_xlsx_types_pkg.t_cursor_info;
+  /** All SQL columns of cursor */
   g_sql_columns apexir_xlsx_types_pkg.t_sql_col_infos;
+  /** NLS Numeric Characters derived from database session */
   g_nls_numeric_characters VARCHAR2(2);
 
-/* Support Procedures */
+/** Support Procedures */
 
+  /**
+  * Retrieve report title and populate global variable.
+  */
   PROCEDURE get_report_title
   AS
   BEGIN
@@ -56,6 +77,13 @@ AS
     ;
   END get_report_title;
 
+  /**
+  * Performs a substitution similar to APEX.
+  * Candidate to be replaced by APEX standard function.
+  * @param p_data         The original data.
+  * @param p_substitution The APEX variable to be used.
+  * @return Original data with substitution performed.
+  */
   FUNCTION replace_substitutions(p_data IN VARCHAR2, p_substitution IN VARCHAR2)
     RETURN VARCHAR2
   AS
@@ -68,6 +96,10 @@ AS
     RETURN l_retval;
   END replace_substitutions;
 
+  /**
+  * Retrieve the defined IR columns from APEX dictionary
+  * and store in global variable.
+  */
   PROCEDURE get_std_columns
   AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
@@ -86,7 +118,10 @@ AS
     END LOOP;
   END get_std_columns;
 
-
+  /**
+  * Retrieve currently defined copmutations from APEX dictionary
+  * and store in global variable.
+  */
   PROCEDURE get_computations
   AS
     col_rec  apexir_xlsx_types_pkg.t_apex_ir_col;
@@ -109,6 +144,11 @@ AS
     END LOOP;
   END get_computations;
 
+  /**
+  * Flags an aggregation as active and converts column delimited list to array.
+  * @param p_column_value   Column value retrieved for aggregation
+  * @param p_aggregate_name Defined name of aggregation
+  */
   FUNCTION transform_aggregate (p_column_value IN VARCHAR2, p_aggregate_name IN VARCHAR2)
     RETURN apexir_xlsx_types_pkg.t_apex_ir_aggregate
   AS
@@ -125,6 +165,10 @@ AS
     RETURN l_retval;
   END transform_aggregate;
 
+  /**
+  * Retrieves aggregates and control break from APEX dictionary
+  * and stores in global variables.
+  */
   PROCEDURE get_aggregates
   AS
     l_avg_cols  apex_application_page_ir_rpt.avg_columns_on_break%TYPE;
@@ -238,6 +282,10 @@ AS
     END IF;
   END get_aggregates;
 
+  /**
+  * Retrieves all row and column highlights
+  * and stores in global variables.
+  */
   PROCEDURE get_highlights
   AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_highlight;
@@ -285,6 +333,11 @@ AS
     END LOOP;
   END get_highlights;
 
+  /**
+  * Loops through all row highlights for current fetch
+  * and sets row style if highlight condition is met.
+  * @param p_fetched_row_cnt Amount of rows fetched
+  */
   PROCEDURE process_row_highlights (p_fetched_row_cnt IN PLS_INTEGER)
   AS
     l_cur_highlight VARCHAR2(30);
@@ -310,6 +363,10 @@ AS
     END LOOP;
   END process_row_highlights;
 
+  /**
+  * Wrapper calling all procedures retrieving settings.
+  * E.g. report title, computations
+  */
   PROCEDURE get_settings
   AS
   BEGIN
@@ -335,6 +392,10 @@ AS
     END IF;
   END get_settings;
 
+  /**
+  * Loops through all cells in current display row starting from second
+  * and applies a thin border to fix missing borders with merged cells.
+  */
   PROCEDURE fix_borders
   AS
   BEGIN
@@ -349,6 +410,9 @@ AS
     END LOOP;
   END fix_borders;
 
+  /**
+  * Prints the filter definitions to the spreadsheet.
+  */
   PROCEDURE print_filter_header
   AS
     l_condition_display VARCHAR2(4100);
@@ -416,6 +480,10 @@ AS
     END LOOP;
   END print_filter_header;
 
+  /**
+  * Prints the header parts.
+  * Title, filters and highlights
+  */
   PROCEDURE print_header
   AS
     l_cur_hl_name VARCHAR2(30);
@@ -507,6 +575,9 @@ AS
     g_current_disp_row := g_current_disp_row + 1; --add additional row
   END print_header;
 
+  /**
+  * Prepare the cursor and pull column information from it.
+  */
   PROCEDURE prepare_cursor
   AS
     l_desc_tab dbms_sql.desc_tab2;
@@ -573,6 +644,9 @@ AS
     END LOOP;
   END prepare_cursor;
 
+  /** 
+  * Prints the column headings.
+  */
   PROCEDURE print_column_headers
   AS
   BEGIN
@@ -599,6 +673,11 @@ AS
     g_current_disp_row := g_current_disp_row + 1;
   END print_column_headers;
 
+  /**
+  * Checks column highlights for specified column and marks them active if condition is met.
+  * @param p_column_name     The current column to check
+  * @param p_fetched_row_cnt Amount of rows fetched
+  */
   FUNCTION process_col_highlights ( p_column_name IN VARCHAR2
                                   , p_fetched_row_cnt IN PLS_INTEGER
                                   )
@@ -628,6 +707,11 @@ AS
     RETURN retval;
   END process_col_highlights;
 
+  /**
+  * Prints the defined aggregates for a column
+  * @param p_column_name     The current column to run the aggregates
+  * @param p_fetched_row_cnt Amount of rows fetched  
+  */
   PROCEDURE print_aggregates ( p_column_name IN VARCHAR2
                              , p_fetched_row_cnt IN PLS_INTEGER
                              )
@@ -676,6 +760,12 @@ AS
     END LOOP;
   END print_aggregates;
 
+  /**
+  * Print column of type NUMBER.
+  * @param p_column_name       Current column
+  * @param p_fetched_row_cnt   Amount of rows fetched
+  * @param p_active_highlights Array of column highlights where condition was met.
+  */
   PROCEDURE print_num_column ( p_column_name IN VARCHAR2
                              , p_fetched_row_cnt IN PLS_INTEGER
                              , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
@@ -735,6 +825,12 @@ AS
     l_col_values.DELETE;
   END print_num_column;
 
+  /**
+  * Prints a column of data type DATE.
+  * @param p_column_name       Current column
+  * @param p_fetched_row_cnt   Amount of rows fetched
+  * @param p_active_highlights Array of column highlights where condition was met  
+  */
   PROCEDURE print_date_column ( p_column_name IN VARCHAR2
                               , p_fetched_row_cnt IN PLS_INTEGER
                               , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
@@ -794,6 +890,12 @@ AS
     l_col_values.DELETE;
   END print_date_column;
 
+  /**
+  * Prints a column of data type VARCHAR.
+  * @param p_column_name       Current column
+  * @param p_fetched_row_cnt   Amount of rows fetched
+  * @param p_active_highlights Array of column highlights where condition was met  
+  */
   PROCEDURE print_vc_column ( p_column_name IN VARCHAR2
                             , p_fetched_row_cnt IN PLS_INTEGER
                             , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
@@ -854,6 +956,14 @@ AS
     l_col_values.DELETE;
   END print_vc_column;
 
+  /**
+  * Prints a column of data type CLOB.
+  * Value is converted to VARCHAR2, therefore standard limitation of VARCAHR2 applies.
+  * If CLOB is too long value is simply truncated.
+  * @param p_column_name       Current column
+  * @param p_fetched_row_cnt   Amount of rows fetched
+  * @param p_active_highlights Array of column highlights where condition was met  
+  */
   PROCEDURE print_clob_column ( p_column_name IN VARCHAR2
                               , p_fetched_row_cnt IN PLS_INTEGER
                               , p_active_highlights IN apexir_xlsx_types_pkg.t_apex_ir_active_hl
@@ -914,6 +1024,10 @@ AS
     l_col_values.DELETE;
   END print_clob_column;
 
+  /**
+  * Prints the used aggregate types given a control break.
+  * @param p_row_offset Additional row offset to place aggregate types
+  */
   PROCEDURE print_aggregate_types (p_row_offset IN PLS_INTEGER)
   AS
     l_cur_aggregate_type VARCHAR2(30);
@@ -947,6 +1061,10 @@ AS
     END LOOP;
   END print_aggregate_types;
 
+  /**
+  * Checks for any control breaks in current fetch and populates global variable.
+  * @param p_fetched_row_cnt   Amount of rows fetched
+  */
   PROCEDURE process_break_rows (p_fetched_row_cnt IN PLS_INTEGER)
   AS
     l_cnt NUMBER := 0;
@@ -984,6 +1102,10 @@ AS
     END IF;
   END process_break_rows;
 
+  /**
+  * Wrapper for all procedures printing data.
+  * Calls the building blocks in the right order and provides the overall control structure.
+  */
   PROCEDURE print_data
   AS
     l_cur_col_name VARCHAR2(4000);
@@ -1044,8 +1166,7 @@ AS
     dbms_sql.close_cursor( g_cursor_info.cursor_id );
   END print_data;
 
-/* Main Function */
-
+  
   FUNCTION apexir2sheet
     ( p_ir_region_id NUMBER
     , p_app_id NUMBER := NV('APP_ID')
@@ -1116,12 +1237,22 @@ AS
     l_retval.mime_type := 'application/octet';
     l_retval.file_size := dbms_lob.getlength(l_retval.file_content);
     RETURN l_retval;
-/*  EXCEPTION
+  EXCEPTION
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
         dbms_sql.close_cursor( g_cursor_info.cursor_id );
       END IF;
-      RETURN NULL;*/
+      apex_debug.message( p_message => 'Unexpected error while generating file.'
+                        , p_level => apex_debug.c_log_level_error
+                        );
+      apex_debug.message( p_message => 'Generated SQL:'
+                        , p_level => apex_debug.c_log_level_error
+                        );
+                        
+      apex_debug.log_long_message( p_message => g_apex_ir_info.final_sql
+                                 , p_level => apex_debug.c_log_level_error
+                                 );
+      RETURN NULL;
   END apexir2sheet;
 
 END APEXIR_XLSX_PKG;
