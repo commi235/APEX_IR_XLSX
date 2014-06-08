@@ -1244,12 +1244,13 @@ AS
       END IF;
       apex_debug.message( p_message => 'Unexpected error while generating file.'
                         , p_level => apex_debug.c_log_level_error
+                        , p_force => true
                         );
-      apex_debug.message( p_message => 'Generated SQL:'
-                        , p_level => apex_debug.c_log_level_error
-                        );
-                        
-      apex_debug.log_long_message( p_message => g_apex_ir_info.final_sql
+      apex_debug.log_long_message( p_message => 'Error Backtrace: ' || dbms_utility.format_error_backtrace
+                                 , p_level => apex_debug.c_log_level_error
+                                 , p_enabled => true
+                                 );                  
+      apex_debug.log_long_message( p_message => 'Generated SQL: ' || g_apex_ir_info.final_sql
                                  , p_level => apex_debug.c_log_level_error
                                  );
       RETURN NULL;
