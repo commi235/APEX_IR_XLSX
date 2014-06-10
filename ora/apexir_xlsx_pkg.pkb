@@ -185,6 +185,8 @@ AS
     l_aggregates apexir_xlsx_types_pkg.t_apex_ir_aggregates;
     l_aggregate_col_offset PLS_INTEGER;
     l_col_aggregates apexir_xlsx_types_pkg.t_apex_ir_col_aggregates;
+    l_tmp apex_application_global.vc_arr2;
+    l_break_cols apexir_xlsx_types_pkg.t_apex_ir_aggregate;
     l_break_enabled BOOLEAN := FALSE;
   BEGIN
     -- First get run-time settings for aggregate infos
@@ -218,6 +220,13 @@ AS
        AND base_report_id = g_apex_ir_info.base_report_id
        AND session_id = g_apex_ir_info.session_id;
     
+    IF l_break_on IS NOT NULL THEN
+      l_tmp := apex_util.string_to_table(l_break_on);
+      FOR i IN 1..l_tmp.COUNT LOOP
+        l_break_cols(l_tmp(i)) := i;
+      END LOOP;
+    END IF;
+    
     IF l_all_aggregates IS NOT NULL THEN
       l_aggregates.sum_cols := transform_aggregate(l_sum_cols, 'Sum');
       l_aggregates.avg_cols := transform_aggregate(l_avg_cols, 'Average');
@@ -231,7 +240,7 @@ AS
       l_cur_col := g_col_settings.FIRST();
       WHILE (l_cur_col IS NOT NULL)
       LOOP
-        IF l_break_on IS NOT NULL AND INSTR(l_break_on, l_cur_col) > 0 THEN
+        IF l_break_on IS NOT NULL AND l_break_cols.EXISTS(l_cur_col) THEN
           IF NOT l_break_enabled THEN l_break_enabled := TRUE; END IF;
           g_col_settings(l_cur_col).is_break_col := TRUE;
           IF g_col_settings(l_cur_col).is_visible THEN
@@ -1233,7 +1242,11 @@ AS
     -- Generate the "real" data
     print_data;
 
-    -- return the generated spreadsheet and file info
+    -- show generated SQL statement in debug mode
+    apex_debug.log_long_message( p_message => 'Generated SQL: ' || g_apex_ir_info.final_sql
+                               , p_level => apex_debug.c_log_level_info
+                               );
+    -- return the generated spreadsheet and file info                             
     l_retval.file_content := xlsx_builder_pkg.FINISH;
     l_retval.file_name := g_apex_ir_info.report_title || CASE WHEN g_xlsx_options.append_date_file_name THEN '_' || to_char(SYSDATE, 'YYYYMMDD') ELSE NULL END || '.xlsx';
     l_retval.mime_type := 'application/octet';
