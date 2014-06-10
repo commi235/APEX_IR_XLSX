@@ -85,7 +85,7 @@ AS
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
-    , is_break_col BOOLEAN
+    , is_break_col BOOLEAN := FALSE
     , aggregates t_apex_ir_col_aggregates
     , highlight_conds t_apex_ir_highlights
     , format_mask apex_application_page_ir_col.format_mask%TYPE

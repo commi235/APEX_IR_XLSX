@@ -240,38 +240,40 @@ AS
           END IF;
         END IF;
         l_aggregate_col_offset := g_apex_ir_info.aggregates_offset; -- reset offset to global offset for every new column
-        l_col_aggregates.delete;
-        IF INSTR(l_all_aggregates, l_cur_col) > 0 THEN
-          IF l_aggregates.sum_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Sum').col_num := l_aggregate_col_offset + l_aggregates.sum_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.sum_cols.count;
+        l_col_aggregates.DELETE;
+        IF NOT g_col_settings(l_cur_col).is_break_col THEN
+          IF INSTR(l_all_aggregates, l_cur_col) > 0 THEN
+            IF l_aggregates.sum_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Sum').col_num := l_aggregate_col_offset + l_aggregates.sum_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.sum_cols.count;
+            END IF;
+            IF l_aggregates.avg_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Average').col_num := l_aggregate_col_offset + l_aggregates.avg_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.avg_cols.count;
+            END IF;
+            IF l_aggregates.max_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Maximum').col_num := l_aggregate_col_offset + l_aggregates.max_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.max_cols.count;
+            END IF;
+            IF l_aggregates.min_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Minimum').col_num := l_aggregate_col_offset + l_aggregates.min_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.min_cols.count;
+            END IF;
+            IF l_aggregates.median_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Median').col_num := l_aggregate_col_offset + l_aggregates.median_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.median_cols.count;
+            END IF;
+            IF l_aggregates.count_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Count').col_num := l_aggregate_col_offset + l_aggregates.count_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_cols.count;
+            END IF;
+            IF l_aggregates.count_distinct_cols.EXISTS(l_cur_col) THEN
+              l_col_aggregates('Unique Count').col_num := l_aggregate_col_offset + l_aggregates.count_distinct_cols(l_cur_col);
+              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_distinct_cols.count;
+            END IF;
           END IF;
-          IF l_aggregates.avg_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Average').col_num := l_aggregate_col_offset + l_aggregates.avg_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.avg_cols.count;
-          END IF;
-          IF l_aggregates.max_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Maximum').col_num := l_aggregate_col_offset + l_aggregates.max_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.max_cols.count;
-          END IF;
-          IF l_aggregates.min_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Minimum').col_num := l_aggregate_col_offset + l_aggregates.min_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.min_cols.count;
-          END IF;
-          IF l_aggregates.median_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Median').col_num := l_aggregate_col_offset + l_aggregates.median_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.median_cols.count;
-          END IF;
-          IF l_aggregates.count_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Count').col_num := l_aggregate_col_offset + l_aggregates.count_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_cols.count;
-          END IF;
-          IF l_aggregates.count_distinct_cols.EXISTS(l_cur_col) THEN
-            l_col_aggregates('Unique Count').col_num := l_aggregate_col_offset + l_aggregates.count_distinct_cols(l_cur_col);
-            l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_distinct_cols.count;
-          END IF;
-          g_col_settings(l_cur_col).aggregates := l_col_aggregates;
         END IF;
+        g_col_settings(l_cur_col).aggregates := l_col_aggregates;
         l_cur_col := g_col_settings.next(l_cur_col);
       END LOOP;
     ELSE
