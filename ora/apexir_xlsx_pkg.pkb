@@ -1093,8 +1093,8 @@ AS
       END IF;      
       l_break_values.DELETE;
     ELSE
-      FOR i IN 1..p_fetched_row_cnt LOOP
-        g_cursor_info.break_rows(i) := l_cnt;
+      FOR i IN 1..p_fetched_row_cnt + 1 LOOP
+        g_cursor_info.break_rows(g_current_sql_row + i) := l_cnt;
       END LOOP;
       IF p_fetched_row_cnt < c_bulk_size AND g_xlsx_options.show_aggregates THEN
         print_aggregate_types(p_fetched_row_cnt + l_cnt);
@@ -1253,7 +1253,8 @@ AS
       apex_debug.log_long_message( p_message => 'Generated SQL: ' || g_apex_ir_info.final_sql
                                  , p_level => apex_debug.c_log_level_error
                                  );
-      RETURN NULL;
+      l_retval.error_encountered := TRUE;
+      RETURN l_retval;
   END apexir2sheet;
 
 END APEXIR_XLSX_PKG;

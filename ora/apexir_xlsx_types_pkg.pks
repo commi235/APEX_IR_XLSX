@@ -224,6 +224,7 @@ AS
     , file_content BLOB
     , mime_type VARCHAR2(255)
     , file_size NUMBER
+    , error_encountered BOOLEAN := FALSE
     );
     
 END APEXIR_XLSX_TYPES_PKG;

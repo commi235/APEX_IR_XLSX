@@ -21,7 +21,7 @@ AS
   * @param p_show_report_title   Determines if a report title should be rendered as a headline. Default: TRUE
   * @param p_show_filters        Determines if active filters should be rendered as headlines. Default: TRUE
   * @param p_show_highlights     Determines if highlight definitions shoul be rendered as headlines. Default: TRUE
-  * @param p_original_line_break Set to the line break used for normal display of teh interactive report. Default: &lt;br /&gt;
+  * @param p_original_line_break Set to the line break used for normal display of the interactive report. Default: &lt;br /&gt;
   * @param p_replace_line_break  Sets the line break used in the XLSX file, replaces original line break set above. Default: \r\n
   * @param p_append_date         Determines if the current date (Format: YYYYMMDD) should be appended to the generated file name. Default: TRUE
   * @return Record Type with file name, generated file, mime type, file size
