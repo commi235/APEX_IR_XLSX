@@ -2,27 +2,25 @@ CREATE OR REPLACE PACKAGE zip_util_pkg
   AUTHID CURRENT_USER
 AS
 
-  /*
- 
-  Purpose:      Package handles zipping and unzipping of files
- 
-  Remarks:      by Anton Scheffer, see http://forums.oracle.com/forums/thread.jspa?messageID=9289744#9289744
-  
-                for unzipping, see http://technology.amis.nl/blog/8090/parsing-a-microsoft-word-docx-and-unzip-zipfiles-with-plsql
-                for zipping, see http://forums.oracle.com/forums/thread.jspa?threadID=1115748&tstart=0
- 
-  Who     Date        Description
-  ------  ----------  --------------------------------
-  MBR     09.01.2011  Created
-  MK      16.04.2014  Removed UTL_FILE dependencies and file operations
- 
-  */
+/**
+* Purpose:      Package handles zipping and unzipping of files
+*
+* Remarks:      by Anton Scheffer, see http://forums.oracle.com/forums/thread.jspa?messageID=9289744#9289744
+*
+*               for unzipping, see http://technology.amis.nl/blog/8090/parsing-a-microsoft-word-docx-and-unzip-zipfiles-with-plsql
+*               for zipping, see http://forums.oracle.com/forums/thread.jspa?threadID=1115748&tstart=0
+*
+* Who     Date        Description
+* ------  ----------  --------------------------------
+* MBR     09.01.2011  Created
+* MK      16.04.2014  Removed UTL_FILE dependencies and file operations
+*
+* @headcom
+**/
 
-  /* Types */
+  /** List of all files within zipped file */
   TYPE t_file_list IS TABLE OF CLOB;
 
-
-  /* API */
 
   FUNCTION little_endian( p_big IN NUMBER
                         , p_bytes IN pls_integer := 4
@@ -55,4 +53,4 @@ AS
   PROCEDURE finish_zip( p_zipped_blob IN OUT NOCOPY BLOB);
   
 END zip_util_pkg;
-/ 
+/

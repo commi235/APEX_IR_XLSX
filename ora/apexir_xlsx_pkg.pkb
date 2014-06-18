@@ -148,6 +148,7 @@ AS
   * Flags an aggregation as active and converts column delimited list to array.
   * @param p_column_value   Column value retrieved for aggregation
   * @param p_aggregate_name Defined name of aggregation
+  * @return Array with aggregates indexed by column alias
   */
   FUNCTION transform_aggregate (p_column_value IN VARCHAR2, p_aggregate_name IN VARCHAR2)
     RETURN apexir_xlsx_types_pkg.t_apex_ir_aggregate
