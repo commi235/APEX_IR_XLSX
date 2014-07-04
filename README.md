@@ -6,8 +6,8 @@ Download APEX Interactive Reports as XLSX files.
 INSTALLATION
 ------------
 Navigate to folder "setup".
-Simply run the script "install_all.sql" if you want everything installed at once.
-If you have the referenced libraries already you can run "install_main.sql" to install the main package.
+Simply run the script "install_all.sql" if you want everything installed at once. 
+If you have the referenced libraries already you can run "install_main.sql" to install the main package. 
 Libraries can be installed standalone by using "install_libs.sql".
 
 You can also manually create the packages by running the separate package specifications and bodies in your favourite IDE.
