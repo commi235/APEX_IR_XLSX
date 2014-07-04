@@ -1,0 +1,6 @@
+[submodule "lib/xlsx_builder"]
+	path = lib/xlsx_builder
+	url = https://github.com/commi235/xlsx_builder.git
+[submodule "lib/zip_util"]
+	path = lib/zip_util
+	url = https://github.com/commi235/zip_util.git
