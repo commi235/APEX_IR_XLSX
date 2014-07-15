@@ -43,19 +43,24 @@ HOW TO USE
 ###Enable download for all interactive reports in application  
 1. Create an application item to hold the requestes interactive report id. 
    We'll assume the item is called APEXIR_REGION_ID in the following.
-2. Create button on page with interactive report. 
-   Set Action to "Defined by Dynamic Action" 
-   Put following in button attributes:
+2. Create button on page with interactive report.  
+   Set Action to "Defined by Dynamic Action"  
+3. Create dynamic action.  
+   Event: Click  
+   Selection Type: Button  
+   Button: The button you just created.  
+   Condition: Leave as default of "- No Condition -"  
+   Create one True Action of Type Execute JavaScript Code with following code:  
 ```
-   onclick="javascript:redirect('f?p=&APP_ID.:&APP_PAGE_ID.:&SESSION.:XLSX:&DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));"
+   redirect('f?p=&APP_ID.:&APP_PAGE_ID.:&SESSION.:XLSX:&DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
 ```
-   This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.
-3. Create Application Process 
+   This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.  
+4. Create Application Process  
    Type: PL/SQL anonymous block  
-   Process Point: On Load - Before Header 
+   Process Point: On Load - Before Header  
    Condition Type: Request = Expression 1  
    Expression 1: XLSX  
-   Process: 
+   Process:  
 ```sql
    DECLARE
      l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
