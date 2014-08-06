@@ -9,6 +9,9 @@ AS
   c_col_data_type_num CONSTANT VARCHAR2(30) := 'NUMBER';
   c_col_data_type_date CONSTANT VARCHAR2(30) := 'DATE';
   c_col_data_type_clob CONSTANT VARCHAR2(30) := 'CLOB';
+  
+  c_ir_group_by_view CONSTANT VARCHAR2(8) := 'GROUP_BY';
+  c_ir_standard_view CONSTANT VARCHAR2(6) := 'REPORT';
 
   /** Column type if column is normal display column */
   c_display_column CONSTANT VARCHAR2(30) := 'DISPLAY';
@@ -56,7 +59,7 @@ AS
   /**
   * Retrieve report title and populate global variable.
   */
-  PROCEDURE get_report_title
+  PROCEDURE get_report_title_type
   AS
   BEGIN
     SELECT CASE
@@ -65,7 +68,9 @@ AS
              ELSE
                ir.region_name
            END report_title
+         , COALESCE( g_apex_ir_info.view_mode, report_view_mode, c_ir_standard_view ) report_view_mode
       INTO g_apex_ir_info.report_title
+         , g_apex_ir_info.view_mode
       FROM apex_application_page_ir ir JOIN apex_application_page_ir_rpt rpt
              ON ir.application_id = rpt.application_id
             AND ir.page_id = rpt.page_id
@@ -75,7 +80,7 @@ AS
        AND rpt.base_report_id = g_apex_ir_info.base_report_id
        AND rpt.session_id = g_apex_ir_info.session_id
     ;
-  END get_report_title;
+  END get_report_title_type;
 
   /**
   * Performs a substitution similar to APEX.
@@ -117,6 +122,103 @@ AS
       g_col_settings(rec.column_alias) := col_rec;
     END LOOP;
   END get_std_columns;
+
+  /**
+  * Retrieve column definitions for Group By Mode
+  * and store in gloabl variable
+  */
+  PROCEDURE get_group_by_def
+  as
+    col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
+  BEGIN
+    FOR rec IN ( SELECT REPLACE(group_by_columns, ':', ', ') group_by_cols
+                      , function_01
+                      , function_column_01
+                      , function_db_column_name_01
+                      , function_label_01
+                      , function_format_mask_01
+                      , function_sum_01
+                      , function_02
+                      , function_column_02
+                      , function_db_column_name_02
+                      , function_label_02
+                      , function_format_mask_02
+                      , function_sum_02
+                      , function_03
+                      , function_column_03
+                      , function_db_column_name_03
+                      , function_label_03
+                      , function_format_mask_03
+                      , function_sum_03
+                      , rtrim( CASE WHEN sort_column_01 IS NOT NULL
+                                    THEN sort_column_01 || ' ' || sort_direction_01 || ', '
+                                    ELSE NULL
+                               END ||
+                               CASE WHEN sort_column_02 IS NOT NULL
+                                    THEN sort_column_02 || ' ' || sort_direction_02 || ', '
+                                    ELSE NULL
+                               END ||
+                               CASE WHEN sort_column_03 IS NOT NULL
+                                    THEN sort_column_03 || ' ' || sort_direction_03 || ', '
+                                    ELSE NULL
+                               END ||
+                               CASE WHEN sort_column_04 IS NOT NULL
+                                    THEN sort_column_04 || ' ' || sort_direction_04
+                                    ELSE NULL
+                               END
+                             , ', '
+                             ) grp_sort
+                   FROM apex_application_page_ir_grpby grpby JOIN apex_application_page_ir_rpt rpt
+                         ON grpby.report_id = rpt.report_id
+                        AND grpby.application_id = rpt.application_id
+                        AND grpby.page_id = rpt.page_id
+                  WHERE rpt.page_id = g_apex_ir_info.page_id
+                    AND rpt.application_id = g_apex_ir_info.application_id
+                    AND rpt.base_report_id = g_apex_ir_info.base_report_id
+                )
+    LOOP
+      -- Add generated column names to column array
+      -- (Manual loop, can this be areal one?)
+      IF rec.function_01 IS NOT NULL THEN
+        col_rec.report_label := rec.function_label_01;
+        col_rec.group_by_function := rec.function_01 || '( ' || rec.function_column_01 || ' )';
+        col_rec.format_mask := rec.function_format_mask_01;
+        col_rec.is_visible := TRUE;
+        g_col_settings(rec.function_db_column_name_01) := col_rec;
+        g_apex_ir_info.group_by_funcs := ', ' || g_apex_ir_info.group_by_funcs
+                                      || col_rec.group_by_function
+                                      || ' AS ' || rec.function_db_column_name_01;
+      END IF;
+      
+      IF rec.function_02 IS NOT NULL THEN
+        col_rec.report_label := rec.function_label_02;
+        col_rec.group_by_function := rec.function_02 || '( ' || rec.function_column_02 || ' )';
+        col_rec.format_mask := rec.function_format_mask_02;
+        col_rec.is_visible := TRUE;
+        g_col_settings(rec.function_db_column_name_02) := col_rec;
+        g_apex_ir_info.group_by_funcs := g_apex_ir_info.group_by_funcs || ', ' 
+                                      || col_rec.group_by_function
+                                      || ' AS ' || rec.function_db_column_name_02;
+      END IF;
+
+      IF rec.function_03 IS NOT NULL THEN
+        col_rec.report_label := rec.function_label_03;
+        col_rec.group_by_function := rec.function_03 || '( ' || rec.function_column_03 || ' )';
+        col_rec.format_mask := rec.function_format_mask_03;
+        col_rec.is_visible := TRUE;
+        g_col_settings(rec.function_db_column_name_03) := col_rec;
+        g_apex_ir_info.group_by_funcs := g_apex_ir_info.group_by_funcs || ', '
+                                      || col_rec.group_by_function
+                                      || ' AS ' || rec.function_db_column_name_03;
+      END IF;
+
+      -- Put the sort into global variable
+      IF rec.grp_sort IS NOT NULL THEN
+        g_apex_ir_info.group_by_sort := 'ORDER BY ' || rec.grp_sort;
+      END IF;
+      g_apex_ir_info.group_by_cols := rec.group_by_cols;
+    END LOOP;
+  END get_group_by_def;
 
   /**
   * Retrieve currently defined copmutations from APEX dictionary
@@ -393,9 +495,17 @@ AS
     WHERE parameter = 'NLS_DATE_FORMAT';
 
 
-    get_report_title;
+    get_report_title_type;
     get_std_columns;
     get_computations;
+
+    IF g_apex_ir_info.view_mode = c_ir_group_by_view THEN
+      get_group_by_def;
+      -- Disable everything not applicable for Group By View
+      g_xlsx_options.show_aggregates := FALSE;
+      g_xlsx_options.process_highlights := FALSE;
+    END IF;
+
     IF g_xlsx_options.show_aggregates THEN
       get_aggregates;
     END IF;
@@ -595,11 +705,21 @@ AS
     l_desc_tab dbms_sql.desc_tab2;
     l_cur_col_highlight apexir_xlsx_types_pkg.t_apex_ir_highlight;
   BEGIN
-    -- Split sql query on first from and inject highlight conditions
-    g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'))
-                             || g_apex_ir_info.final_sql
-                             || SUBSTR(apex_plugin_util.replace_substitutions(g_apex_ir_info.report_definition.sql_query), INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
-
+    IF g_apex_ir_info.view_mode = c_ir_group_by_view THEN
+      g_apex_ir_info.final_sql := 'SELECT * FROM ( SELECT '
+                                || g_apex_ir_info.group_by_cols
+                                || g_apex_ir_info.group_by_funcs || ' FROM ( ' 
+                                || g_apex_ir_info.report_definition.sql_query ||' ) ' 
+                                || CASE WHEN g_apex_ir_info.group_by_cols IS NOT NULL
+                                        THEN 'GROUP BY ' || g_apex_ir_info.group_by_cols
+                                   END
+                                || ' ) ' || g_apex_ir_info.group_by_sort;
+    ELSE
+      -- Split sql query on first from and inject highlight conditions
+      g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'))
+                               || g_apex_ir_info.final_sql
+                               || SUBSTR(apex_plugin_util.replace_substitutions(g_apex_ir_info.report_definition.sql_query), INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
+    END IF;
     g_cursor_info.cursor_id := dbms_sql.open_cursor;
     dbms_sql.parse( g_cursor_info.cursor_id, g_apex_ir_info.final_sql, dbms_sql.NATIVE );
     dbms_sql.describe_columns2( g_cursor_info.cursor_id, g_cursor_info.column_count, l_desc_tab );
@@ -1185,6 +1305,7 @@ AS
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
     , p_ir_request VARCHAR2 := V('REQUEST')
+    , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
@@ -1208,6 +1329,10 @@ AS
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
     g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
     g_apex_ir_info.aggregates_offset := regexp_count(substr(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ') OVER (')), ',');
+    -- Fix the IR view mode if requested
+    IF p_ir_view_mode IN (c_ir_standard_view, c_ir_group_by_view) THEN
+      g_apex_ir_info.view_mode := p_ir_view_mode;
+    END IF;
 
     -- Generation Options
     g_xlsx_options.show_aggregates := p_aggregates;
@@ -1223,13 +1348,15 @@ AS
     g_xlsx_options.original_line_break := p_original_line_break;
     g_xlsx_options.replace_line_break := p_replace_line_break;
     g_xlsx_options.append_date_file_name := p_append_date;
-    g_xlsx_options.sheet := xlsx_builder_pkg.new_sheet; -- needed before running any xlsx_builder_pkg commands
+    g_xlsx_options.requested_view_mode := p_ir_view_mode;
 
     -- retrieve IR infos
     get_settings;
     -- construct full SQL and prepare cursor
     prepare_cursor;
-
+    
+    -- needed before running any xlsx_builder_pkg commands
+    g_xlsx_options.sheet := xlsx_builder_pkg.new_sheet( p_sheetname => g_apex_ir_info.view_mode );
     -- print header if any header option is enabled
     IF g_xlsx_options.show_title OR g_xlsx_options.show_filters OR g_xlsx_options.show_highlights THEN
       print_header;

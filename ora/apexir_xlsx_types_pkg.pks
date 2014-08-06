@@ -73,14 +73,15 @@ AS
 
   /**
   * Holds the relevant information about a column in the interactive report.
-  * @param report_label    Column heading as defined on intercative report
-  * @param is_visible      Defines if column is printed in file.
-  * @param is_break_col    Set to TRUE if column is used for control break.
-  * @param aggregates      All defined aggregates for the column.
-  * @param highlight_conds All highlights defined on column.
-  * @param format_mask     Format mask as defined in IR column definition.
-  * @param sql_col_num     SQL column number to retrieve value.
-  * @param display_column  Column number in file to show value.
+  * @param report_label      Column heading as defined on intercative report
+  * @param is_visible        Defines if column is printed in file.
+  * @param is_break_col      Set to TRUE if column is used for control break.
+  * @param aggregates        All defined aggregates for the column.
+  * @param highlight_conds   All highlights defined on column.
+  * @param format_mask       Format mask as defined in IR column definition.
+  * @param sql_col_num       SQL column number to retrieve value.
+  * @param display_column    Column number in file to show value.
+  * @param group_by_function Aggregate Function SQL for Group By View
   */
   TYPE t_apex_ir_col IS RECORD
     ( report_label apex_application_page_ir_col.report_label%TYPE
@@ -91,6 +92,7 @@ AS
     , format_mask apex_application_page_ir_col.format_mask%TYPE
     , sql_col_num NUMBER
     , display_column PLS_INTEGER
+    , group_by_function apex_application_page_ir_grpby.function_01%TYPE
     )
   ;
   
@@ -115,6 +117,7 @@ AS
   * @param aggregates_offset          SQL column offset to calculate aggregate column numbers.
   * @param active_aggregates          All active aggregate types on IR.
   * @param aggregate_type_disp_column Display column for aggregate types.
+  * @param view_mode                  Current view mode of report
   */
   TYPE t_apex_ir_info IS RECORD
     ( application_id NUMBER
@@ -130,6 +133,10 @@ AS
     , aggregates_offset PLS_INTEGER
     , active_aggregates t_apex_ir_active_aggregates
     , aggregate_type_disp_column PLS_INTEGER := 1
+    , view_mode VARCHAR2(255)
+    , group_by_cols VARCHAR2(4000)
+    , group_by_sort VARCHAR2(4000)
+    , group_by_funcs VARCHAR2(4000)
     )
   ;
 
@@ -150,6 +157,7 @@ AS
   * @param replace_line_break    Line break to be used in XLSX file
   * @param default_date_format   Default date format, taken from v$nls_parameters
   * @param append_date_file_name Append current date to file name or not
+  * @param requested_view_mode   Interactive Report view mode to use
   */
   TYPE t_xlsx_options IS RECORD
     ( show_title BOOLEAN
@@ -167,6 +175,7 @@ AS
     , replace_line_break VARCHAR2(10)
     , default_date_format VARCHAR2(100)
     , append_date_file_name BOOLEAN
+    , requested_view_mode VARCHAR2(8)
     )
   ;
 
