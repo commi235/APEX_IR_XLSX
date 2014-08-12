@@ -54,6 +54,9 @@ AS
   /** NLS Numeric Characters derived from database session */
   g_nls_numeric_characters VARCHAR2(2);
 
+  TYPE t_report_cols IS TABLE OF PLS_INTEGER INDEX BY VARCHAR2(4000);
+  g_report_cols t_report_cols;
+
 /** Support Procedures */
 
   /**
@@ -61,6 +64,17 @@ AS
   */
   PROCEDURE get_report_title_type
   AS
+    l_report_columns apex_application_page_ir_rpt.report_columns%TYPE;
+    PROCEDURE transform_rpt_cols
+    AS
+      l_vc_arr2 apex_application_global.vc_arr2;
+    BEGIN
+      l_vc_arr2 := apex_util.string_to_table(l_report_columns);
+      FOR i IN 1..l_vc_arr2.count
+      LOOP
+        g_report_cols(l_vc_arr2(i)) := i;
+      END LOOP;
+    END transform_rpt_cols;
   BEGIN
     SELECT CASE
              WHEN rpt.report_name IS NOT NULL THEN
@@ -69,8 +83,10 @@ AS
                ir.region_name
            END report_title
          , COALESCE( g_apex_ir_info.view_mode, report_view_mode, c_ir_standard_view ) report_view_mode
+         , report_columns
       INTO g_apex_ir_info.report_title
          , g_apex_ir_info.view_mode
+         , l_report_columns
       FROM apex_application_page_ir ir JOIN apex_application_page_ir_rpt rpt
              ON ir.application_id = rpt.application_id
             AND ir.page_id = rpt.page_id
@@ -80,6 +96,7 @@ AS
        AND rpt.base_report_id = g_apex_ir_info.base_report_id
        AND rpt.session_id = g_apex_ir_info.session_id
     ;
+    transform_rpt_cols;
   END get_report_title_type;
 
   /**
@@ -116,10 +133,13 @@ AS
                     AND application_id = g_apex_ir_info.application_id
                     AND region_id = g_apex_ir_info.region_id )
     LOOP
-      col_rec.report_label := rec.report_label;
-      col_rec.is_visible := rec.display_text_as != 'HIDDEN';
-      col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
-      g_col_settings(rec.column_alias) := col_rec;
+      -- not really elegant, research better way to filter in query above
+      IF g_report_cols.exists(rec.column_alias) THEN
+        col_rec.report_label := rec.report_label;
+        col_rec.is_visible := rec.display_text_as != 'HIDDEN';
+        col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
+        g_col_settings(rec.column_alias) := col_rec;
+      END IF;
     END LOOP;
   END get_std_columns;
 
@@ -221,7 +241,7 @@ AS
   END get_group_by_def;
 
   /**
-  * Retrieve currently defined copmutations from APEX dictionary
+  * Retrieve currently defined computations from APEX dictionary
   * and store in global variable.
   */
   PROCEDURE get_computations
