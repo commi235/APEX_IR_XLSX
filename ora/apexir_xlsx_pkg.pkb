@@ -133,7 +133,12 @@ AS
                     AND application_id = g_apex_ir_info.application_id
                     AND region_id = g_apex_ir_info.region_id )
     LOOP
-      -- not really elegant, research better way to filter in query above
+      /* not really elegant,
+         research better way to filter in query above,
+         12c allows to directly bind pl/sql arrays
+         SELECT * FROM abc WHERE col IN (SELECT column_value FROM table(plsql_array))
+         Conditional Compilation??
+      */
       IF g_report_cols.exists(rec.column_alias) THEN
         col_rec.report_label := rec.report_label;
         col_rec.is_visible := rec.display_text_as != 'HIDDEN';
