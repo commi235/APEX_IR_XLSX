@@ -83,7 +83,7 @@ AS
                ir.region_name
            END report_title
          , COALESCE( g_apex_ir_info.view_mode, report_view_mode, c_ir_standard_view ) report_view_mode
-         , report_columns
+         , RTRIM(report_columns, ':')
       INTO g_apex_ir_info.report_title
          , g_apex_ir_info.view_mode
          , l_report_columns
@@ -133,18 +133,11 @@ AS
                     AND application_id = g_apex_ir_info.application_id
                     AND region_id = g_apex_ir_info.region_id )
     LOOP
-      /* not really elegant,
-         research better way to filter in query above,
-         12c allows to directly bind pl/sql arrays
-         SELECT * FROM abc WHERE col IN (SELECT column_value FROM table(plsql_array))
-         Conditional Compilation??
-      */
-      IF g_report_cols.exists(rec.column_alias) THEN
-        col_rec.report_label := rec.report_label;
-        col_rec.is_visible := rec.display_text_as != 'HIDDEN';
-        col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
-        g_col_settings(rec.column_alias) := col_rec;
-      END IF;
+      -- Always take all fields, even if not displayed might be used in filters
+      col_rec.report_label := rec.report_label;
+      col_rec.is_visible := (rec.display_text_as != 'HIDDEN' AND g_report_cols.exists(rec.column_alias));
+      col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
+      g_col_settings(rec.column_alias) := col_rec;
     END LOOP;
   END get_std_columns;
 
@@ -589,21 +582,26 @@ AS
       THEN
         l_condition_display := rec.condition_name;
       ELSE
-        l_condition_display := REPLACE( rec.condition_display,'#APXWS_COL_NAME#'
-                                      , g_col_settings(rec.condition_column_name).report_label
-                                      );
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_OP_NAME#', rec.condition_operator);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_AND#', 'and');
-        IF INSTR(l_condition_display, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_condition_display, '#APXWS_EXPR2_DATE#') > 0 THEN
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_DATE#', TO_CHAR(TO_DATE(rec.condition_expression, c_apex_date_fmt)));
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_DATE#', TO_CHAR(TO_DATE(rec.condition_expression2, c_apex_date_fmt)));
+        -- Filters for removed columns can still exist, skip if column not defined in IR
+        IF g_report_cols.EXISTS(rec.condition_column_name) THEN
+          l_condition_display := REPLACE( rec.condition_display,'#APXWS_COL_NAME#'
+                                        , g_col_settings(rec.condition_column_name).report_label
+                                        );
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_OP_NAME#', rec.condition_operator);
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_AND#', 'and');
+          IF INSTR(l_condition_display, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_condition_display, '#APXWS_EXPR2_DATE#') > 0 THEN
+            l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_DATE#', TO_CHAR(TO_DATE(rec.condition_expression, c_apex_date_fmt)));
+            l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_DATE#', TO_CHAR(TO_DATE(rec.condition_expression2, c_apex_date_fmt)));
+          END IF;
+  
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR#', rec.condition_expression);
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NAME#', rec.condition_expression);
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NUMBER#', rec.condition_expression);
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
+          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
+        ELSE
+          CONTINUE; -- skip filter if column isn't existing anymore
         END IF;
-
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR#', rec.condition_expression);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NAME#', rec.condition_expression);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NUMBER#', rec.condition_expression);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
-        l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
       END IF;
       xlsx_builder_pkg.mergecells( p_tl_col => 1
                                  , p_tl_row => g_current_disp_row
