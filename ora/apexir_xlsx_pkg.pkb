@@ -414,6 +414,31 @@ AS
     END IF;
   END get_aggregates;
 
+  FUNCTION display_for_condition ( p_column_name IN VARCHAR2
+                                 , p_display IN VARCHAR2
+                                 , p_operator IN VARCHAR2
+                                 , p_exp_1 IN VARCHAR2
+                                 , p_exp_2 IN VARCHAR2
+                                 )
+    RETURN VARCHAR2
+  AS
+    l_retval VARCHAR2(4000) := p_display;
+  BEGIN
+    l_retval := REPLACE( l_retval, '#APXWS_COL_NAME#', g_col_settings(p_column_name).report_label );
+    l_retval := REPLACE( l_retval, '#APXWS_OP_NAME#', p_operator );
+    l_retval := REPLACE( l_retval, '#APXWS_AND#', 'and' );
+    IF INSTR( l_retval, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_retval, '#APXWS_EXPR2_DATE#' ) > 0 THEN
+      l_retval := REPLACE( l_retval, '#APXWS_EXPR_DATE#', TO_CHAR( TO_DATE( p_exp_1, c_apex_date_fmt ) ) );
+      l_retval := REPLACE( l_retval, '#APXWS_EXPR2_DATE#', TO_CHAR( TO_DATE( p_exp_2, c_apex_date_fmt ) ) );
+    END IF;
+    l_retval := REPLACE( l_retval, '#APXWS_EXPR#', p_exp_1);
+    l_retval := REPLACE( l_retval, '#APXWS_EXPR_NAME#', p_exp_1);
+    l_retval := REPLACE( l_retval, '#APXWS_EXPR_NUMBER#', p_exp_1);
+    l_retval := REPLACE( l_retval, '#APXWS_EXPR2#', p_exp_2);
+    l_retval := REPLACE( l_retval, '#APXWS_EXPR2_NAME#', p_exp_2);    
+    RETURN l_retval;
+  END display_for_condition;
+
   /**
   * Retrieves all row and column highlights
   * and stores in global variables.
@@ -422,14 +447,26 @@ AS
   AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_highlight;
     hl_num NUMBER := 0;
+    l_apxws_expr_vals apex_application_global.vc_arr2;
+    FUNCTION wrap_exp (p_exp IN VARCHAR2)
+      RETURN VARCHAR2
+    AS
+    BEGIN
+      RETURN '''' || p_exp || '''';
+    END wrap_exp;
   BEGIN
-    FOR rec IN (SELECT CASE
+    FOR rec IN (SELECT condition_name,
+                       CASE
                          WHEN cond.highlight_row_color IS NOT NULL OR cond.highlight_row_font_color IS NOT NULL
-                           THEN NULL
-                         ELSE cond.condition_column_name
-                       END condition_column_name,
-                       REPLACE (cond.condition_sql, '#APXWS_EXPR#', '''' || cond.condition_expression || '''') test_sql,
-                       cond.condition_name,
+                           THEN 'ROW'
+                         ELSE 'COLUMN'
+                       END highlight_type,
+                       condition_column_name,
+                       condition_operator,
+                       condition_expression,
+                       condition_expression2,
+                       cond.condition_sql,
+                       cond.condition_display,
                        REPLACE(COALESCE(cond.highlight_row_color, cond.highlight_cell_color), '#') bg_color,
                        REPLACE(COALESCE(cond.highlight_row_font_color, cond.highlight_cell_font_color), '#') font_color
                   FROM apex_application_page_ir_cond cond JOIN apex_application_page_ir_rpt r
@@ -450,18 +487,43 @@ AS
                 ORDER BY cond.condition_column_name, cond.highlight_sequence
                )
     LOOP
-      hl_num := hl_num + 1;
-      col_rec.bg_color := rec.bg_color;
-      col_rec.font_color := rec.font_color;
-      col_rec.highlight_name := rec.condition_name;
-      col_rec.highlight_sql := REPLACE(rec.test_sql, '#APXWS_HL_ID#', 1);
-      col_rec.affected_column := rec.condition_column_name;
-      IF rec.condition_column_name IS NOT NULL AND g_col_settings.EXISTS(rec.condition_column_name) THEN
-        g_col_highlights('HL_' || to_char(hl_num)) := col_rec;
-      ELSE
-        g_row_highlights('HL_' || to_char(hl_num)) := col_rec;
+      IF g_col_settings.EXISTS(rec.condition_column_name) THEN
+        hl_num := hl_num + 1;
+        col_rec.bg_color := rec.bg_color;
+        col_rec.font_color := rec.font_color;
+        IF rec.condition_name IS NOT NULL THEN
+          col_rec.highlight_name := rec.condition_name;
+        ELSE
+          col_rec.highlight_name := display_for_condition( p_column_name => rec.condition_column_name
+                                                         , p_display => rec.condition_display
+                                                         , p_operator => rec.condition_operator
+                                                         , p_exp_1 => rec.condition_expression
+                                                         , p_exp_2 => rec.condition_expression2
+                                                         );
+        END IF;
+        -- Store and replace static part
+        col_rec.highlight_sql := REPLACE(rec.condition_sql, '#APXWS_HL_ID#', 1);
+        
+        IF LOWER(rec.condition_operator) IN ('in', 'not in')
+        THEN -- IN and NOT IN need special handling as the amount of values is unclear
+          l_apxws_expr_vals := apex_util.string_to_table(rec.condition_expression, ',');
+          FOR i IN 1..l_apxws_expr_vals.COUNT LOOP
+            l_apxws_expr_vals(i) := wrap_exp(TRIM(l_apxws_expr_vals(i)));
+            col_rec.highlight_sql := REPLACE(col_rec.highlight_sql, '#APXWS_EXPR_VAL' || to_char(i, 'FM9999') || '#', l_apxws_expr_vals(i));
+          END LOOP;
+        ELSE --Operators which do not require special handling
+          col_rec.highlight_sql := REPLACE(col_rec.highlight_sql, '#APXWS_EXPR#', wrap_exp(rec.condition_expression));
+          col_rec.highlight_sql := REPLACE(col_rec.highlight_sql, '#APXWS_EXPR2#', wrap_exp(rec.condition_expression2));
+        END IF;
+  
+        IF rec.highlight_type = 'COLUMN' THEN
+          col_rec.affected_column := rec.condition_column_name;
+          g_col_highlights('HL_' || to_char(hl_num)) := col_rec;
+        ELSE
+          g_row_highlights('HL_' || to_char(hl_num)) := col_rec;
+        END IF;
+        g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || ', ' || col_rec.highlight_sql || ' AS HL_' || to_char(hl_num);
       END IF;
-      g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || ', ' || col_rec.highlight_sql || ' AS HL_' || to_char(hl_num);
     END LOOP;
   END get_highlights;
 
@@ -584,21 +646,12 @@ AS
       ELSE
         -- Filters for removed columns can still exist, skip if column not defined in IR
         IF g_report_cols.EXISTS(rec.condition_column_name) THEN
-          l_condition_display := REPLACE( rec.condition_display,'#APXWS_COL_NAME#'
-                                        , g_col_settings(rec.condition_column_name).report_label
-                                        );
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_OP_NAME#', rec.condition_operator);
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_AND#', 'and');
-          IF INSTR(l_condition_display, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_condition_display, '#APXWS_EXPR2_DATE#') > 0 THEN
-            l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_DATE#', TO_CHAR(TO_DATE(rec.condition_expression, c_apex_date_fmt)));
-            l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_DATE#', TO_CHAR(TO_DATE(rec.condition_expression2, c_apex_date_fmt)));
-          END IF;
-  
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR#', rec.condition_expression);
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NAME#', rec.condition_expression);
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR_NUMBER#', rec.condition_expression);
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2#', rec.condition_expression2);
-          l_condition_display := REPLACE(l_condition_display, '#APXWS_EXPR2_NAME#', rec.condition_expression2);
+          l_condition_display := display_for_condition( p_column_name => rec.condition_column_name
+                                                      , p_display => rec.condition_display
+                                                      , p_operator => rec.condition_operator
+                                                      , p_exp_1 => rec.condition_expression
+                                                      , p_exp_2 => rec.condition_expression2
+                                                      );
         ELSE
           CONTINUE; -- skip filter if column isn't existing anymore
         END IF;
