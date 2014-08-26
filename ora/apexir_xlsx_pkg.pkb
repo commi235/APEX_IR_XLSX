@@ -1476,6 +1476,53 @@ AS
       RETURN l_retval;
   END apexir2sheet;
 
+  PROCEDURE download
+    ( p_ir_region_id NUMBER
+    , p_app_id NUMBER := NV('APP_ID')
+    , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
+    , p_ir_session_id NUMBER := NV('SESSION')
+    , p_ir_request VARCHAR2 := V('REQUEST')
+    , p_ir_view_mode VARCHAR2 := NULL
+    , p_column_headers BOOLEAN := TRUE
+    , p_aggregates IN BOOLEAN := TRUE
+    , p_process_highlights IN BOOLEAN := TRUE
+    , p_show_report_title IN BOOLEAN := TRUE
+    , p_show_filters IN BOOLEAN := TRUE
+    , p_show_highlights IN BOOLEAN := TRUE
+    , p_original_line_break IN VARCHAR2 := '<br />'
+    , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_append_date IN BOOLEAN := TRUE
+    )
+  AS
+    l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
+  BEGIN
+    l_xlsx := apexir2sheet( p_ir_region_id
+                          , p_app_id
+                          , p_ir_page_id
+                          , p_ir_session_id
+                          , p_ir_request
+                          , p_ir_view_mode
+                          , p_column_headers
+                          , p_aggregates
+                          , p_process_highlights
+                          , p_show_report_title
+                          , p_show_filters
+                          , p_show_highlights
+                          , p_original_line_break
+                          , p_replace_line_break
+                          , p_append_date
+                          );
+    IF NOT l_xlsx.error_encountered THEN
+      OWA_UTIL.mime_header( l_xlsx.mime_type, FALSE );
+      HTP.P( 'Content-length: ' || l_xlsx.file_size );
+      HTP.P( 'Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"' );
+      OWA_UTIL.http_header_close;
+      WPG_DOCLOAD.download_file( l_xlsx.file_content );
+    ELSE
+      raise_application_error( -20001, 'Something went wrong while generating the file. :-(' );
+    END IF;
+  END download;
+
 END APEXIR_XLSX_PKG;
 
 /
