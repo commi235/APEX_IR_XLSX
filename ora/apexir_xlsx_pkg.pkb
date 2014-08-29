@@ -127,7 +127,15 @@ AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
   BEGIN
     -- These column names are static defined, used as reference
-    FOR rec IN ( SELECT column_alias, report_label, display_text_as, format_mask
+    FOR rec IN ( SELECT column_alias
+                      , report_label
+                      , display_text_as
+                      , format_mask
+                      , CASE WHEN column_id > 26
+                             THEN chr(trunc((column_id - 1) / 26) + 64)
+                             ELSE NULL END
+                          || chr(column_id - (trunc((column_id - 1) / 26) * 26) + 64)
+                        AS ident
                    FROM APEX_APPLICATION_PAGE_IR_COL
                   WHERE page_id = g_apex_ir_info.page_id
                     AND application_id = g_apex_ir_info.application_id
@@ -135,6 +143,7 @@ AS
     LOOP
       -- Always take all fields, even if not displayed might be used in filters
       col_rec.report_label := rec.report_label;
+      col_rec.ident := rec.ident;
       col_rec.is_visible := (rec.display_text_as != 'HIDDEN' AND g_report_cols.exists(rec.column_alias));
       col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
       g_col_settings(rec.column_alias) := col_rec;
