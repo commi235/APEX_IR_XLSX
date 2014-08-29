@@ -193,6 +193,7 @@ AS
                   WHERE rpt.page_id = g_apex_ir_info.page_id
                     AND rpt.application_id = g_apex_ir_info.application_id
                     AND rpt.base_report_id = g_apex_ir_info.base_report_id
+                    AND rpt.session_id = g_apex_ir_info.session_id
                 )
     LOOP
       -- Add generated column names to column array
