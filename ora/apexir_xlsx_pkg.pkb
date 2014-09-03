@@ -131,10 +131,10 @@ AS
                       , report_label
                       , display_text_as
                       , format_mask
-                      , CASE WHEN column_id > 26
-                             THEN chr(trunc((column_id - 1) / 26) + 64)
+                      , CASE WHEN display_order > 26
+                             THEN chr(trunc((display_order - 1) / 26) + 64)
                              ELSE NULL END
-                          || chr(column_id - (trunc((column_id - 1) / 26) * 26) + 64)
+                          || chr(display_order - (trunc((display_order - 1) / 26) * 26) + 64)
                         AS ident
                    FROM APEX_APPLICATION_PAGE_IR_COL
                   WHERE page_id = g_apex_ir_info.page_id
