@@ -84,7 +84,8 @@ AS
   * @param group_by_function Aggregate Function SQL for Group By View
   */
   TYPE t_apex_ir_col IS RECORD
-    ( report_label apex_application_page_ir_col.report_label%TYPE
+    ( ident VARCHAR2(10)
+    , report_label apex_application_page_ir_col.report_label%TYPE
     , is_visible BOOLEAN
     , is_break_col BOOLEAN := FALSE
     , aggregates t_apex_ir_col_aggregates
