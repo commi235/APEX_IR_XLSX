@@ -155,8 +155,24 @@ AS
   * and store in gloabl variable
   */
   PROCEDURE get_group_by_def
-  as
+  AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_col;
+    FUNCTION get_sql( p_function IN VARCHAR2, p_column IN VARCHAR2 )
+      RETURN VARCHAR2
+    AS
+      l_retval VARCHAR2(32767);
+    BEGIN
+      RETURN
+        CASE p_function
+          WHEN 'COUNT_DISTINCT' THEN 'count(distinct '
+          WHEN 'RATIO_TO_REPORT_SUM' THEN 'ratio_to_report(sum('
+          WHEN 'RATIO_TO_REPORT_COUNT' THEN 'ratio_to_report(count('
+          ELSE p_function || '('
+        END || p_column || ')' ||
+        CASE
+          WHEN p_function IN ('RATIO_TO_REPORT_SUM','RATIO_TO_REPORT_COUNT') THEN ') OVER () * 100'
+        END;
+    END get_sql;
   BEGIN
     FOR rec IN ( SELECT REPLACE(group_by_columns, ':', ', ') group_by_cols
                       , function_01
@@ -209,7 +225,7 @@ AS
       -- (Manual loop, can this be areal one?)
       IF rec.function_01 IS NOT NULL THEN
         col_rec.report_label := rec.function_label_01;
-        col_rec.group_by_function := rec.function_01 || '( ' || rec.function_column_01 || ' )';
+        col_rec.group_by_function := get_sql( rec.function_01, rec.function_column_01);
         col_rec.format_mask := rec.function_format_mask_01;
         col_rec.is_visible := TRUE;
         g_col_settings(rec.function_db_column_name_01) := col_rec;
@@ -220,7 +236,7 @@ AS
       
       IF rec.function_02 IS NOT NULL THEN
         col_rec.report_label := rec.function_label_02;
-        col_rec.group_by_function := rec.function_02 || '( ' || rec.function_column_02 || ' )';
+        col_rec.group_by_function := get_sql( rec.function_02, rec.function_column_02);
         col_rec.format_mask := rec.function_format_mask_02;
         col_rec.is_visible := TRUE;
         g_col_settings(rec.function_db_column_name_02) := col_rec;
@@ -231,7 +247,7 @@ AS
 
       IF rec.function_03 IS NOT NULL THEN
         col_rec.report_label := rec.function_label_03;
-        col_rec.group_by_function := rec.function_03 || '( ' || rec.function_column_03 || ' )';
+        col_rec.group_by_function := get_sql( rec.function_03, rec.function_column_03);
         col_rec.format_mask := rec.function_format_mask_03;
         col_rec.is_visible := TRUE;
         g_col_settings(rec.function_db_column_name_03) := col_rec;
