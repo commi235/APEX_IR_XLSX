@@ -335,6 +335,11 @@ AS
     l_tmp apex_application_global.vc_arr2;
     l_break_cols apexir_xlsx_types_pkg.t_apex_ir_aggregate;
     l_break_enabled BOOLEAN := FALSE;
+    PROCEDURE add_to_offset (l_addition IN PLS_INTEGER)
+    AS
+    BEGIN
+      l_aggregate_col_offset := l_aggregate_col_offset + l_addition;
+    END add_to_offset;
   BEGIN
     -- First get run-time settings for aggregate infos
     SELECT break_enabled_on,
@@ -401,32 +406,37 @@ AS
           IF INSTR(l_all_aggregates, l_cur_col) > 0 THEN
             IF l_aggregates.sum_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Sum').col_num := l_aggregate_col_offset + l_aggregates.sum_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.sum_cols.count;
             END IF;
+            add_to_offset(l_aggregates.sum_cols.count);
+
             IF l_aggregates.avg_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Average').col_num := l_aggregate_col_offset + l_aggregates.avg_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.avg_cols.count;
             END IF;
+            add_to_offset(l_aggregates.avg_cols.count);
+
             IF l_aggregates.max_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Maximum').col_num := l_aggregate_col_offset + l_aggregates.max_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.max_cols.count;
             END IF;
+            add_to_offset(l_aggregates.max_cols.count);
+
             IF l_aggregates.min_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Minimum').col_num := l_aggregate_col_offset + l_aggregates.min_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.min_cols.count;
             END IF;
+            add_to_offset(l_aggregates.min_cols.count);
+            
             IF l_aggregates.median_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Median').col_num := l_aggregate_col_offset + l_aggregates.median_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.median_cols.count;
             END IF;
+            add_to_offset(l_aggregates.median_cols.count);
+            
             IF l_aggregates.count_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Count').col_num := l_aggregate_col_offset + l_aggregates.count_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_cols.count;
             END IF;
+            add_to_offset(l_aggregates.count_cols.count);
             IF l_aggregates.count_distinct_cols.EXISTS(l_cur_col) THEN
               l_col_aggregates('Unique Count').col_num := l_aggregate_col_offset + l_aggregates.count_distinct_cols(l_cur_col);
-              l_aggregate_col_offset := l_aggregate_col_offset + l_aggregates.count_distinct_cols.count;
             END IF;
+            add_to_offset(l_aggregates.count_distinct_cols.count);
           END IF;
         END IF;
         g_col_settings(l_cur_col).aggregates := l_col_aggregates;
@@ -953,24 +963,34 @@ AS
     l_aggregate_values dbms_sql.number_table;
     l_cur_aggregate_name VARCHAR2(30);
     l_aggregate_offset PLS_INTEGER := 1;
-    last_aggr_val NUMBER;
   BEGIN
-    -- fixed order for aggregates, same as occurence in t_apexir_col type
-    l_cur_aggregate_name := g_apex_ir_info.active_aggregates.FIRST();
-    WHILE (l_cur_aggregate_name IS NOT NULL) LOOP
-      IF g_col_settings(p_column_name).aggregates.EXISTS(l_cur_aggregate_name) THEN
-        dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id
-                             , g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).col_num
-                             , l_aggregate_values
-                             );
+    IF NOT ( g_col_settings(p_column_name).is_break_col
+          OR g_col_settings(p_column_name).display_column = g_apex_ir_info.aggregate_type_disp_column
+           )
+      THEN -- exclude break cols
+      -- fixed order for aggregates, same as occurence in t_apexir_col type
+      l_cur_aggregate_name := g_apex_ir_info.active_aggregates.FIRST();
+      WHILE (l_cur_aggregate_name IS NOT NULL) LOOP
+        IF g_col_settings(p_column_name).aggregates.EXISTS(l_cur_aggregate_name) THEN
+          dbms_sql.COLUMN_VALUE( g_cursor_info.cursor_id
+                               , g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).col_num
+                               , l_aggregate_values
+                               );
+        END IF;
         FOR i IN 0 .. p_fetched_row_cnt - 1 loop
-          last_aggr_val := g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value;
-          IF (g_apex_ir_info.aggregate_type_disp_column > 1 AND g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i))
-          OR (g_apex_ir_info.aggregate_type_disp_column = 1 AND p_fetched_row_cnt <= c_bulk_size AND i = p_fetched_row_cnt - 1) 
+          IF ( g_apex_ir_info.aggregate_type_disp_column > 1
+           AND g_cursor_info.break_rows(g_current_sql_row + i + 1) != g_cursor_info.break_rows(g_current_sql_row + i)
+             )
+          OR ( g_apex_ir_info.aggregate_type_disp_column = 1
+           AND p_fetched_row_cnt <= c_bulk_size
+           AND i = p_fetched_row_cnt - 1
+             ) --last row
           THEN
             xlsx_builder_pkg.cell( p_col => g_col_settings(p_column_name).display_column
                                  , p_row => g_current_disp_row + i + g_cursor_info.break_rows(g_current_sql_row + i) + l_aggregate_offset
                                  , p_value => CASE
+                                                WHEN NOT g_col_settings(p_column_name).aggregates.EXISTS(l_cur_aggregate_name)
+                                                  THEN TO_NUMBER(NULL)
                                                 WHEN i = 0 AND g_current_sql_row > 1
                                                   THEN g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value
                                                 ELSE l_aggregate_values( i + l_aggregate_values.FIRST() )
@@ -985,13 +1005,15 @@ AS
                                  , p_sheet => g_xlsx_options.sheet
                                  );
           END IF;
-        g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value := l_aggregate_values( i + l_aggregate_values.FIRST() );
-        END LOOP;
-      END IF;
-      l_aggregate_offset := l_aggregate_offset + 1;
-      l_cur_aggregate_name := g_apex_ir_info.active_aggregates.NEXT(l_cur_aggregate_name);
-      l_aggregate_values.DELETE;
-    END LOOP;
+          IF g_col_settings(p_column_name).aggregates.EXISTS(l_cur_aggregate_name) THEN
+            g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value := l_aggregate_values( i + l_aggregate_values.FIRST() );
+          END IF;
+        END LOOP row_loop;
+        l_aggregate_offset := l_aggregate_offset + 1;
+        l_cur_aggregate_name := g_apex_ir_info.active_aggregates.NEXT(l_cur_aggregate_name);
+        l_aggregate_values.DELETE;
+      END LOOP aggregate_loop;
+    END IF;
   END print_aggregates;
 
   /**
