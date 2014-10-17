@@ -1,7 +1,6 @@
 CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG" 
 AS
 
-
   /** Defines the bulk fetch size used by DBMS_SQL */
   c_bulk_size CONSTANT pls_integer := 200;
 
