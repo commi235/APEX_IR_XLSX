@@ -397,7 +397,7 @@ AS
           g_col_settings(l_cur_col).is_break_col := TRUE;
           IF g_col_settings(l_cur_col).is_visible THEN
             g_apex_ir_info.aggregate_type_disp_column := g_apex_ir_info.aggregate_type_disp_column + 1;
-            g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || l_cur_col || ' || ';
+            g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || 'to_char(' || l_cur_col || ') || ';
           END IF;
         END IF;
         l_aggregate_col_offset := g_apex_ir_info.aggregates_offset; -- reset offset to global offset for every new column
