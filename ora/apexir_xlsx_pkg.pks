@@ -18,6 +18,7 @@ AS
   * @param p_ir_view_mode        Sets the interactive report view mode to use.
   *                              Leave NULL to use APEX context.
   * @param p_column_headers      Determines if column headers should be rendered. Default: TRUE
+  * @param p_col_hdr_help        Determines if the help text is added as a comment to column headers. Default: TRUE
   * @param p_aggregates          Determines if aggregates should be rendered. Default: TRUE
   * @param p_process_highlights  Determines if highlights should be considered to color rows and cells. Default: TRUE
   * @param p_show_report_title   Determines if a report title should be rendered as a headline. Default: TRUE
@@ -36,6 +37,7 @@ AS
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
+    , p_col_hdr_help BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
@@ -55,6 +57,7 @@ AS
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
+    , p_col_hdr_help BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE

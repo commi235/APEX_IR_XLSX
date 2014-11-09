@@ -135,6 +135,7 @@ AS
                              ELSE NULL END
                           || chr(display_order - (trunc((display_order - 1) / 26) * 26) + 64)
                         AS ident
+                      , help_text
                    FROM APEX_APPLICATION_PAGE_IR_COL
                   WHERE page_id = g_apex_ir_info.page_id
                     AND application_id = g_apex_ir_info.application_id
@@ -145,6 +146,7 @@ AS
       col_rec.ident := rec.ident;
       col_rec.is_visible := (rec.display_text_as != 'HIDDEN' AND g_report_cols.exists(rec.column_alias));
       col_rec.format_mask := replace_substitutions(rec.format_mask, 'APP_DATE_TIME_FORMAT');
+      col_rec.help_text := rec.help_text;
       g_col_settings(rec.column_alias) := col_rec;
     END LOOP;
   END get_std_columns;
@@ -911,6 +913,12 @@ AS
                              , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                              , p_sheet => g_xlsx_options.sheet
                              );
+        xlsx_builder_pkg.COMMENT( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
+                                , p_row => g_current_disp_row
+                                , p_text => REPLACE(g_col_settings(g_sql_columns(c).col_name).help_text, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
+                                , p_author => 'SYSTEM'
+                                , p_sheet => g_xlsx_options.sheet
+                                );
       END IF;
     END LOOP;
     g_current_disp_row := g_current_disp_row + 1;
@@ -1430,6 +1438,7 @@ AS
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
+    , p_col_hdr_help BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
@@ -1531,6 +1540,7 @@ AS
     , p_ir_request VARCHAR2 := V('REQUEST')
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
+    , p_col_hdr_help BOOLEAN := TRUE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
@@ -1550,6 +1560,7 @@ AS
                           , p_ir_request
                           , p_ir_view_mode
                           , p_column_headers
+                          , p_col_hdr_help
                           , p_aggregates
                           , p_process_highlights
                           , p_show_report_title

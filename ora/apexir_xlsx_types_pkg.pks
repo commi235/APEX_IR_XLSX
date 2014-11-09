@@ -86,6 +86,7 @@ AS
   TYPE t_apex_ir_col IS RECORD
     ( ident VARCHAR2(10)
     , report_label apex_application_page_ir_col.report_label%TYPE
+    , help_text apex_application_page_ir_col.help_text%TYPE
     , is_visible BOOLEAN
     , is_break_col BOOLEAN := FALSE
     , aggregates t_apex_ir_col_aggregates
@@ -146,6 +147,7 @@ AS
   * @param show_title            Show header line with report title
   * @param show_filters          Show header lines with filter settings
   * @param show_column_headers   Show column headers before data
+  * @param col_hdr_help          Include help text on column headers
   * @param process_highlights    Format data according to highlights
   * @param show_highlights       Show header lines with highlight settings, not useful if set without above
   * @param show_aggregates       Process aggregates and show on total lines
@@ -164,6 +166,7 @@ AS
     ( show_title BOOLEAN
     , show_filters BOOLEAN
     , show_column_headers BOOLEAN
+    , col_hdr_help BOOLEAN
     , process_highlights BOOLEAN
     , show_highlights BOOLEAN
     , show_aggregates BOOLEAN
