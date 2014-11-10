@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="APEX IR XLSX Downloader : Download APEX Interactive Report to XLSX file">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>APEX IR XLSX Downloader</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/commi235/APEX_IR_XLSX">View on GitHub</a>
+
+          <h1 id="project_title">APEX IR XLSX Downloader</h1>
+          <h2 id="project_tagline">Download APEX Interactive Report to XLSX file</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/commi235/APEX_IR_XLSX/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/commi235/APEX_IR_XLSX/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a id="apexir_xlsx" class="anchor" href="#apexir_xlsx" aria-hidden="true"><span class="octicon octicon-link"></span></a>APEXIR_XLSX</h1>
+
+<p>Download APEX Interactive Reports as XLSX files.</p>
+
+<h2>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>INSTALLATION</h2>
+
+<p>Navigate to folder "setup".
+Simply run the script "install_all.sql" if you want everything installed at once. 
+If you have the referenced libraries already you can run "install_main.sql" to install the main package. 
+Libraries can be installed standalone by using "install_libs.sql".</p>
+
+<p>You can also manually create the packages by running the separate package specifications and bodies in your favourite IDE.</p>
+
+<h2>
+<a id="how-to-use" class="anchor" href="#how-to-use" aria-hidden="true"><span class="octicon octicon-link"></span></a>HOW TO USE</h2>
+
+<h3>
+<a id="enable-download-for-a-single-interactive-report" class="anchor" href="#enable-download-for-a-single-interactive-report" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for a single interactive report</h3>
+
+<ol>
+<li>Create the interactive report region. (skip if you already have one)</li>
+<li>Run the page and inspect the source code using your browser.</li>
+<li>Mark down the value of the hidden item with id "apexir_REGION_ID" removing the "R" at the beginning.<br>
+The numeric value you now have is the only mandatory input to the main function.</li>
+<li>Create button or similar element to reload page setting request to "XLSX".</li>
+<li>Create page process (sample)<br>
+Type: PL/SQL anonymous block<br>
+Process Point: On Load - Before Header 
+Condition Type: Request = Expression 1<br>
+Expression 1: XLSX<br>
+Process (replace $APEXIR_REGION_ID$ with number from step above):</li>
+</ol>
+
+<div class="highlight highlight-sql"><pre>   DECLARE
+     l_xlsx <span class="no">apexir_xlsx_types_pkg</span>.<span class="no">t_returnvalue</span>;
+   <span class="k">BEGIN</span>
+     l_xlsx :<span class="o">=</span> <span class="no">apexir_xlsx_pkg</span>.<span class="no">apexir2sheet</span>( p_ir_region_id <span class="o">=&gt;</span> $APEXIR_REGION_ID$);
+     <span class="no">OWA_UTIL</span>.<span class="no">mime_header</span> (<span class="no">l_xlsx</span>.<span class="no">mime_type</span>, FALSE);
+     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-length: '</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_size</span>);
+     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-Disposition: attachment; filename="'</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_name</span> <span class="o">||</span> <span class="s1">'"'</span>);
+     <span class="no">OWA_UTIL</span>.<span class="no">http_header_close</span>;
+     <span class="no">WPG_DOCLOAD</span>.<span class="no">download_file</span> (<span class="no">l_xlsx</span>.<span class="no">file_content</span>);
+   END;</pre></div>
+
+<h3>
+<a id="enable-download-for-all-interactive-reports-in-application" class="anchor" href="#enable-download-for-all-interactive-reports-in-application" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for all interactive reports in application</h3>
+
+<ol>
+<li>Create an application item to hold the requestes interactive report id. 
+We'll assume the item is called APEXIR_REGION_ID in the following.</li>
+<li>Create button on page with interactive report.<br>
+Set Action to "Defined by Dynamic Action"<br>
+</li>
+<li>Create dynamic action.<br>
+Event: Click<br>
+Selection Type: Button<br>
+Button: The button you just created.<br>
+Condition: Leave as default of "- No Condition -"<br>
+Create one True Action of Type Execute JavaScript Code with following code:<br>
+</li>
+</ol>
+
+<pre><code>   redirect('f?p=&amp;APP_ID.:&amp;APP_PAGE_ID.:&amp;SESSION.:XLSX:&amp;DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
+</code></pre>
+
+<p>This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.<br>
+4. Create Application Process<br>
+   Type: PL/SQL anonymous block<br>
+   Process Point: On Load - Before Header<br>
+   Condition Type: Request = Expression 1<br>
+   Expression 1: XLSX<br>
+   Process:  </p>
+
+<div class="highlight highlight-sql"><pre>   DECLARE
+     l_xlsx <span class="no">apexir_xlsx_types_pkg</span>.<span class="no">t_returnvalue</span>;
+   <span class="k">BEGIN</span>
+     l_xlsx :<span class="o">=</span> <span class="no">apexir_xlsx_pkg</span>.<span class="no">apexir2sheet</span>( p_ir_region_id <span class="o">=&gt;</span> :APEXIR_REGION_ID);
+     <span class="no">OWA_UTIL</span>.<span class="no">mime_header</span> (<span class="no">l_xlsx</span>.<span class="no">mime_type</span>, FALSE);
+     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-length: '</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_size</span>);
+     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-Disposition: attachment; filename="'</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_name</span> <span class="o">||</span> <span class="s1">'"'</span>);
+     <span class="no">OWA_UTIL</span>.<span class="no">http_header_close</span>;
+     <span class="no">WPG_DOCLOAD</span>.<span class="no">download_file</span> (<span class="no">l_xlsx</span>.<span class="no">file_content</span>);
+   END;</pre></div>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">APEX IR XLSX Downloader maintained by <a href="https://github.com/commi235">commi235</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
