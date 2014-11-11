@@ -34,14 +34,52 @@
         <h1>
 <a id="apexir_xlsx" class="anchor" href="#apexir_xlsx" aria-hidden="true"><span class="octicon octicon-link"></span></a>APEXIR_XLSX</h1>
 
-<p>Download APEX Interactive Reports as XLSX files.</p>
+<p>Download APEX Interactive Reports as XLSX files.<br>
+With this package you can download any Interactive report using the standard Excel file format.<br>
+Main benefits are that all data types are preserved and stored in a way that Excel recognizes them properly.</p>
+
+<h2>
+<a id="supported-functionality" class="anchor" href="#supported-functionality" aria-hidden="true"><span class="octicon octicon-link"></span></a>SUPPORTED FUNCTIONALITY</h2>
+
+<ul>
+<li> Filtering and Sorting</li>
+<li> Control Breaks</li>
+<li> Computations</li>
+<li> Aggregations (with a small limitation, see below)</li>
+<li> Highlights</li>
+<li> VARCHAR2 columns</li>
+<li> DATE columns including formatting (supports &amp;APP_DATE_TIME_FORMAT. substitution)</li>
+<li> NUMBER columns including formatting</li>
+<li> CLOBs (limited to 32767 characters)</li>
+<li> "Group By" view mode (for limitations see below)</li>
+<li> Display column help text as comment on respective column header.</li>
+</ul>
+
+<h2>
+<a id="current-limitations" class="anchor" href="#current-limitations" aria-hidden="true"><span class="octicon octicon-link"></span></a>CURRENT LIMITATIONS</h2>
+
+<ol>
+<li>CLOB columns are supported but converted to VARCHAR2(32767) before inserted into the spreadsheet.<br>
+Support for full size CLOBs is planned for a future release.</li>
+<li>TIMESTAMP columns are treated like DATE columns.<br>
+Full support for TIMESTAMP is planned for a future release.</li>
+<li>Aggregates defined on the first column of any report are ignored.<br>
+The cell is needed to display the aggregation type.<br>
+Currently there are no immediate plans to lift that restriction.</li>
+<li>For the "Group By" view report to work all used columns also need to be present in the "Standard" report view.<br>
+The APEX engine only exposes the SQL query of the standard view currently.<br>
+</li>
+<li>The download only works for authenticated users.<br>
+The APEX engine does not give back base_report_id if user isn't authenticated.<br>
+Research is currently ongoing to lift this restriction.</li>
+</ol>
 
 <h2>
 <a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>INSTALLATION</h2>
 
 <p>Navigate to folder "setup".
-Simply run the script "install_all.sql" if you want everything installed at once. 
-If you have the referenced libraries already you can run "install_main.sql" to install the main package. 
+Simply run the script "install_all.sql" if you want everything installed at once.<br>
+If you have the referenced libraries already you can run "install_main.sql" to install the main package.<br>
 Libraries can be installed standalone by using "install_libs.sql".</p>
 
 <p>You can also manually create the packages by running the separate package specifications and bodies in your favourite IDE.</p>
@@ -63,19 +101,11 @@ Type: PL/SQL anonymous block<br>
 Process Point: On Load - Before Header 
 Condition Type: Request = Expression 1<br>
 Expression 1: XLSX<br>
-Process (replace $APEXIR_REGION_ID$ with number from step above):</li>
+Process (replace $APEXIR_REGION_ID$ with number from step above):<br>
+</li>
 </ol>
 
-<div class="highlight highlight-sql"><pre>   DECLARE
-     l_xlsx <span class="no">apexir_xlsx_types_pkg</span>.<span class="no">t_returnvalue</span>;
-   <span class="k">BEGIN</span>
-     l_xlsx :<span class="o">=</span> <span class="no">apexir_xlsx_pkg</span>.<span class="no">apexir2sheet</span>( p_ir_region_id <span class="o">=&gt;</span> $APEXIR_REGION_ID$);
-     <span class="no">OWA_UTIL</span>.<span class="no">mime_header</span> (<span class="no">l_xlsx</span>.<span class="no">mime_type</span>, FALSE);
-     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-length: '</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_size</span>);
-     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-Disposition: attachment; filename="'</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_name</span> <span class="o">||</span> <span class="s1">'"'</span>);
-     <span class="no">OWA_UTIL</span>.<span class="no">http_header_close</span>;
-     <span class="no">WPG_DOCLOAD</span>.<span class="no">download_file</span> (<span class="no">l_xlsx</span>.<span class="no">file_content</span>);
-   END;</pre></div>
+<div class="highlight highlight-sql"><pre>   <span class="no">apexir_xlsx_pkg</span>.<span class="no">download</span>( p_ir_region_id <span class="o">=&gt;</span> $APEXIR_REGION_ID$);</pre></div>
 
 <h3>
 <a id="enable-download-for-all-interactive-reports-in-application" class="anchor" href="#enable-download-for-all-interactive-reports-in-application" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for all interactive reports in application</h3>
@@ -95,7 +125,7 @@ Create one True Action of Type Execute JavaScript Code with following code:<br>
 </li>
 </ol>
 
-<pre><code>   redirect('f?p=&amp;APP_ID.:&amp;APP_PAGE_ID.:&amp;SESSION.:XLSX:&amp;DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
+<pre><code>   apex.navigation.redirect('f?p=&amp;APP_ID.:&amp;APP_PAGE_ID.:&amp;SESSION.:XLSX:&amp;DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
 </code></pre>
 
 <p>This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.<br>
@@ -106,16 +136,7 @@ Create one True Action of Type Execute JavaScript Code with following code:<br>
    Expression 1: XLSX<br>
    Process:  </p>
 
-<div class="highlight highlight-sql"><pre>   DECLARE
-     l_xlsx <span class="no">apexir_xlsx_types_pkg</span>.<span class="no">t_returnvalue</span>;
-   <span class="k">BEGIN</span>
-     l_xlsx :<span class="o">=</span> <span class="no">apexir_xlsx_pkg</span>.<span class="no">apexir2sheet</span>( p_ir_region_id <span class="o">=&gt;</span> :APEXIR_REGION_ID);
-     <span class="no">OWA_UTIL</span>.<span class="no">mime_header</span> (<span class="no">l_xlsx</span>.<span class="no">mime_type</span>, FALSE);
-     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-length: '</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_size</span>);
-     <span class="no">HTP</span>.<span class="no">p</span> (<span class="s1">'Content-Disposition: attachment; filename="'</span> <span class="o">||</span> <span class="no">l_xlsx</span>.<span class="no">file_name</span> <span class="o">||</span> <span class="s1">'"'</span>);
-     <span class="no">OWA_UTIL</span>.<span class="no">http_header_close</span>;
-     <span class="no">WPG_DOCLOAD</span>.<span class="no">download_file</span> (<span class="no">l_xlsx</span>.<span class="no">file_content</span>);
-   END;</pre></div>
+<div class="highlight highlight-sql"><pre>   <span class="no">apexir_xlsx_pkg</span>.<span class="no">download</span>( p_ir_region_id <span class="o">=&gt;</span> :APEXIR_REGION_ID);</pre></div>
       </section>
     </div>
 
