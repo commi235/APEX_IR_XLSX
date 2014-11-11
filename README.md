@@ -1,13 +1,44 @@
 APEXIR_XLSX
 ===========
 
-Download APEX Interactive Reports as XLSX files.
+Download APEX Interactive Reports as XLSX files.  
+With this package you can download any Interactive report using the standard Excel file format.  
+Main benefits are that all data types are preserved and stored in a way that Excel recognizes them properly.
 
+SUPPORTED FUNCTIONALITY
+-----------------------
+*  Filtering and Sorting
+*  Control Breaks
+*  Computations
+*  Aggregations (with a small limitation, see below)
+*  Highlights
+*  VARCHAR2 columns
+*  DATE columns including formatting (supports &APP_DATE_TIME_FORMAT. substitution)
+*  NUMBER columns including formatting
+*  CLOBs (limited to 32767 characters)
+*  "Group By" view mode (for limitations see below)
+*  Display column help text as comment on respective column header.
+
+CURRENT LIMITATIONS
+-------------------
+1. CLOB columns are supported but converted to VARCHAR2(32767) before inserted into the spreadsheet.  
+   Support for full size CLOBs is planned for a future release.
+2. TIMESTAMP columns are treated like DATE columns.  
+   Full support for TIMESTAMP is planned for a future release.
+2. Aggregates defined on the first column of any report are ignored.  
+   The cell is needed to display the aggregation type.  
+   Currently there are no immediate plans to lift that restriction.
+3. For the "Group By" view report to work all used columns also need to be present in the "Standard" report view.  
+   The APEX engine only exposes the SQL query of the standard view currently.  
+4. The download only works for authenticated users.  
+   The APEX engine does not give back base_report_id if user isn't authenticated.  
+   Research is currently ongoing to lift this restriction.
+   
 INSTALLATION
 ------------
 Navigate to folder "setup".
-Simply run the script "install_all.sql" if you want everything installed at once. 
-If you have the referenced libraries already you can run "install_main.sql" to install the main package. 
+Simply run the script "install_all.sql" if you want everything installed at once.  
+If you have the referenced libraries already you can run "install_main.sql" to install the main package.  
 Libraries can be installed standalone by using "install_libs.sql".
 
 You can also manually create the packages by running the separate package specifications and bodies in your favourite IDE.
@@ -26,18 +57,9 @@ HOW TO USE
    Process Point: On Load - Before Header 
    Condition Type: Request = Expression 1  
    Expression 1: XLSX  
-   Process (replace $APEXIR_REGION_ID$ with number from step above):
+   Process (replace $APEXIR_REGION_ID$ with number from step above):  
 ```sql
-   DECLARE
-     l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
-   BEGIN
-     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => $APEXIR_REGION_ID$);
-     OWA_UTIL.mime_header (l_xlsx.mime_type, FALSE);
-     HTP.p ('Content-length: ' || l_xlsx.file_size);
-     HTP.p ('Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"');
-     OWA_UTIL.http_header_close;
-     WPG_DOCLOAD.download_file (l_xlsx.file_content);
-   END;
+   apexir_xlsx_pkg.download( p_ir_region_id => $APEXIR_REGION_ID$);
 ``` 
 
 ###Enable download for all interactive reports in application  
@@ -52,7 +74,7 @@ HOW TO USE
    Condition: Leave as default of "- No Condition -"  
    Create one True Action of Type Execute JavaScript Code with following code:  
 ```
-   redirect('f?p=&APP_ID.:&APP_PAGE_ID.:&SESSION.:XLSX:&DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
+   apex.navigation.redirect('f?p=&APP_ID.:&APP_PAGE_ID.:&SESSION.:XLSX:&DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
 ```
    This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.  
 4. Create Application Process  
@@ -62,14 +84,5 @@ HOW TO USE
    Expression 1: XLSX  
    Process:  
 ```sql
-   DECLARE
-     l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
-   BEGIN
-     l_xlsx := apexir_xlsx_pkg.apexir2sheet( p_ir_region_id => :APEXIR_REGION_ID);
-     OWA_UTIL.mime_header (l_xlsx.mime_type, FALSE);
-     HTP.p ('Content-length: ' || l_xlsx.file_size);
-     HTP.p ('Content-Disposition: attachment; filename="' || l_xlsx.file_name || '"');
-     OWA_UTIL.http_header_close;
-     WPG_DOCLOAD.download_file (l_xlsx.file_content);
-   END;
+   apexir_xlsx_pkg.download( p_ir_region_id => :APEXIR_REGION_ID);
 ``` 
