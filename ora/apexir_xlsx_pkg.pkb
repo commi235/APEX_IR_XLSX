@@ -913,12 +913,16 @@ AS
                              , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                              , p_sheet => g_xlsx_options.sheet
                              );
-        xlsx_builder_pkg.COMMENT( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
-                                , p_row => g_current_disp_row
-                                , p_text => REPLACE(g_col_settings(g_sql_columns(c).col_name).help_text, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
-                                , p_author => 'SYSTEM'
-                                , p_sheet => g_xlsx_options.sheet
-                                );
+        IF g_xlsx_options.col_hdr_help AND
+           g_col_settings(g_sql_columns(c).col_name).help_text IS NOT NULL
+        THEN
+          xlsx_builder_pkg.COMMENT( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
+                                  , p_row => g_current_disp_row
+                                  , p_text => REPLACE(g_col_settings(g_sql_columns(c).col_name).help_text, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
+                                  , p_author => 'Help'
+                                  , p_sheet => g_xlsx_options.sheet
+                                  );
+        END IF;
       END IF;
     END LOOP;
     g_current_disp_row := g_current_disp_row + 1;
@@ -1473,6 +1477,7 @@ AS
     g_xlsx_options.show_filters := p_show_filters;
     g_xlsx_options.show_highlights := p_show_highlights;
     g_xlsx_options.show_column_headers := p_column_headers;
+    g_xlsx_options.col_hdr_help := p_col_hdr_help;
     g_xlsx_options.display_column_count := 0; -- shift result set to right if > 0
     g_xlsx_options.default_font := 'Arial';
     g_xlsx_options.default_border_color := 'b0a070'; -- not yet implemented...
