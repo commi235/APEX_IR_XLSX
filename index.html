@@ -105,38 +105,43 @@ Process (replace $APEXIR_REGION_ID$ with number from step above):<br>
 </li>
 </ol>
 
-<div class="highlight highlight-sql"><pre>   <span class="no">apexir_xlsx_pkg</span>.<span class="no">download</span>( p_ir_region_id <span class="o">=&gt;</span> $APEXIR_REGION_ID$);</pre></div>
+<div class="highlight highlight-sql"><pre>   <span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_ir_region_id <span class="pl-k">=&gt;</span> $APEXIR_REGION_ID$);</pre></div>
 
 <h3>
 <a id="enable-download-for-all-interactive-reports-in-application" class="anchor" href="#enable-download-for-all-interactive-reports-in-application" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for all interactive reports in application</h3>
 
 <ol>
-<li>Create an application item to hold the requestes interactive report id. 
+<li>Create an application item to hold the requested interactive report id. 
 We'll assume the item is called APEXIR_REGION_ID in the following.</li>
-<li>Create button on page with interactive report.<br>
-Set Action to "Defined by Dynamic Action"<br>
+<li>
+<p>Create Application Computation<br>
+Computation Item: APEXIR_REGION_ID<br>
+Computation Point: Before Header<br>
+Computation Type: SQL Query (return single value)<br>
+Condition Type: Request != Expression 1<br>
+Expression 1: XLSX<br>
+Computation (if you have only one IR on the page):</p>
+
+<div class="highlight highlight-sql"><pre><span class="pl-k">SELECT</span> region_id
+  <span class="pl-k">FROM</span> apex_application_page_ir
+ <span class="pl-k">WHERE</span> application_id <span class="pl-k">=</span> :APP_ID
+   <span class="pl-k">AND</span> page_id <span class="pl-k">=</span> :APP_PAGE_ID</pre></div>
 </li>
-<li>Create dynamic action.<br>
-Event: Click<br>
-Selection Type: Button<br>
-Button: The button you just created.<br>
-Condition: Leave as default of "- No Condition -"<br>
-Create one True Action of Type Execute JavaScript Code with following code:<br>
+<li>
+<p>Create Application Process<br>
+Type: PL/SQL anonymous block<br>
+Process Point: On Load - Before Header<br>
+Condition Type: Request = Expression 1<br>
+Expression 1: XLSX<br>
+Process:</p>
+
+<div class="highlight highlight-sql"><pre><span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_ir_region_id <span class="pl-k">=&gt;</span> :APEXIR_REGION_ID);</pre></div>
 </li>
+<li><p>Create button on page with interactive report.<br>
+Action: Redirect to Page in this Application<br>
+Page: The page you are on.<br>
+Request: XLSX  </p></li>
 </ol>
-
-<pre><code>   apex.navigation.redirect('f?p=&amp;APP_ID.:&amp;APP_PAGE_ID.:&amp;SESSION.:XLSX:&amp;DEBUG.::APEXIR_REGION_ID:' + apex.jQuery('#apexir_REGION_ID').val().substr(1));
-</code></pre>
-
-<p>This will reload the page setting request to "XLSX" and APEXIR_REGION_ID application item to the respective region id.<br>
-4. Create Application Process<br>
-   Type: PL/SQL anonymous block<br>
-   Process Point: On Load - Before Header<br>
-   Condition Type: Request = Expression 1<br>
-   Expression 1: XLSX<br>
-   Process:  </p>
-
-<div class="highlight highlight-sql"><pre>   <span class="no">apexir_xlsx_pkg</span>.<span class="no">download</span>( p_ir_region_id <span class="o">=&gt;</span> :APEXIR_REGION_ID);</pre></div>
       </section>
     </div>
 
