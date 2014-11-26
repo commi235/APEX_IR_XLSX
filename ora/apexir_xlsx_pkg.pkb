@@ -895,33 +895,36 @@ AS
   PROCEDURE print_column_headers
   AS
   BEGIN
+    xlsx_builder_pkg.set_row( p_row => g_current_disp_row
+                            , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
+                                                                           , p_horizontal => 'center'
+                                                                           , p_wrapText => NULLIF(g_xlsx_options.allow_wrap_text, TRUE)
+                                                                           )
+                            , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                   , p_bold => TRUE
+                                                                   )
+                            , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
+                                                                   , p_fgRGB => 'FFF8DC'
+                                                                   )
+                            , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
+                            , p_sheet => g_xlsx_options.sheet
+                            );
     FOR c IN 1..g_cursor_info.column_count LOOP
       IF g_sql_columns(c).is_displayed THEN
         xlsx_builder_pkg.cell( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
                              , p_row => g_current_disp_row
                              , p_value => REPLACE(g_col_settings(g_sql_columns(c).col_name).report_label, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
-                             , p_alignment => CASE
-                                                WHEN g_xlsx_options.allow_wrap_text THEN NULL
-                                                ELSE xlsx_builder_pkg.get_alignment(p_vertical => 'center', p_horizontal => 'center', p_wrapText => FALSE)
-                                              END
-                             , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                    , p_bold => TRUE
-                                                                    )
-                             , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                    , p_fgRGB => 'FFF8DC'
-                                                                    )
-                             , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
                              , p_sheet => g_xlsx_options.sheet
                              );
-        IF g_xlsx_options.col_hdr_help AND
-           g_col_settings(g_sql_columns(c).col_name).help_text IS NOT NULL
-        THEN
-          xlsx_builder_pkg.COMMENT( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
-                                  , p_row => g_current_disp_row
-                                  , p_text => REPLACE(g_col_settings(g_sql_columns(c).col_name).help_text, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
-                                  , p_author => 'Help'
-                                  , p_sheet => g_xlsx_options.sheet
-                                  );
+        IF g_xlsx_options.col_hdr_help THEN
+          IF g_col_settings(g_sql_columns(c).col_name).help_text IS NOT NULL THEN
+            xlsx_builder_pkg.COMMENT( p_col => g_col_settings(g_sql_columns(c).col_name).display_column
+                                    , p_row => g_current_disp_row
+                                    , p_text => REPLACE(g_col_settings(g_sql_columns(c).col_name).help_text, g_xlsx_options.original_line_break, g_xlsx_options.replace_line_break)
+                                    , p_author => 'Help'
+                                    , p_sheet => g_xlsx_options.sheet
+                                    );
+          END IF;
         END IF;
       END IF;
     END LOOP;
@@ -1006,12 +1009,6 @@ AS
                                                   THEN g_col_settings(p_column_name).aggregates(l_cur_aggregate_name).last_value
                                                 ELSE l_aggregate_values( i + l_aggregate_values.FIRST() )
                                               END
-                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                        , p_bold => TRUE
-                                                                        )
-                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                        , p_fgRGB => 'FFF8DC'
-                                                                        )
                                  , p_numFmtId => xlsx_builder_pkg.get_numFmt(xlsx_builder_pkg.OraNumFmt2Excel(g_col_settings(p_column_name).format_mask))
                                  , p_sheet => g_xlsx_options.sheet
                                  );
@@ -1074,12 +1071,6 @@ AS
                                                   THEN l_col_values( i + l_col_values.FIRST() )
                                                 ELSE NULL
                                               END
-                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                        , p_bold => TRUE
-                                                                        )
-                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                        , p_fgRGB => 'FFF8DC'
-                                                                        )
                                  , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
@@ -1139,12 +1130,6 @@ AS
                                                   THEN l_col_values( i + l_col_values.FIRST() )
                                                 ELSE NULL
                                               END
-                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                        , p_bold => TRUE
-                                                                        )
-                                 , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                        , p_fgRGB => 'FFF8DC'
-                                                                        )
                                  , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
@@ -1205,13 +1190,7 @@ AS
                                                ELSE NULL
                                              END
                                  , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
-                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                        , p_bold => TRUE
-                                                                        )
-                                , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                       , p_fgRGB => 'FFF8DC'
-                                                                       )
-                                , p_sheet => g_xlsx_options.sheet
+                                 , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
         END IF;
@@ -1273,13 +1252,7 @@ AS
                                                ELSE NULL
                                              END
                                  , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
-                                 , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                        , p_bold => TRUE
-                                                                        )
-                                , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                       , p_fgRGB => 'FFF8DC'
-                                                                       )
-                                , p_sheet => g_xlsx_options.sheet
+                                 , p_sheet => g_xlsx_options.sheet
                                  );
           END LOOP;
         END IF;
@@ -1303,24 +1276,19 @@ AS
     l_cur_aggregate_type := g_apex_ir_info.active_aggregates.FIRST();
     WHILE (l_cur_aggregate_type IS NOT NULL) LOOP
       xlsx_builder_pkg.set_row( p_row => g_current_disp_row + p_row_offset + l_cnt
-                        , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                               , p_bold => true
-                                                               )
-                        , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
-                                                               , p_fgRGB => 'FFF8DC'
-                                                               )
-                        );
+                              , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
+                                                                     , p_bold => TRUE
+                                                                     )
+                              , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
+                                                                     , p_fgRGB => 'FFF8DC'
+                                                                     )
+                              , p_alignment => xlsx_builder_pkg.get_alignment( p_wrapText => NULLIF(g_xlsx_options.allow_wrap_text, TRUE) )
+                              , p_sheet => g_xlsx_options.sheet
+                              );
 
       xlsx_builder_pkg.cell( p_col => g_apex_ir_info.aggregate_type_disp_column
                            , p_row => g_current_disp_row + p_row_offset + l_cnt
                            , p_value => l_cur_aggregate_type
-                           , p_alignment => CASE WHEN g_xlsx_options.allow_wrap_text THEN NULL ELSE xlsx_builder_pkg.get_alignment(p_wrapText => FALSE) END
-                           , p_fontId => xlsx_builder_pkg.get_font( p_name => g_xlsx_options.default_font
-                                                                  , p_bold => TRUE
-                                                                  )
-                           , p_fillId => xlsx_builder_pkg.get_fill( p_patterntype => 'solid'
-                                                                  , p_fgRGB => 'FFF8DC'
-                                                                  )
                            , p_sheet => g_xlsx_options.sheet
                            );
       l_cnt := l_cnt + 1;
