@@ -67,12 +67,23 @@ AS
     PROCEDURE transform_rpt_cols
     AS
       l_vc_arr2 apex_application_global.vc_arr2;
+      l_null_index_found BOOLEAN := FALSE;
     BEGIN
       l_vc_arr2 := apex_util.string_to_table(l_report_columns);
-      FOR i IN 1..l_vc_arr2.count
+      FOR i IN 1..l_vc_arr2.COUNT
       LOOP
-        g_report_cols(l_vc_arr2(i)) := i;
+        IF l_vc_arr2(i) IS NOT NULL
+        THEN
+          g_report_cols(l_vc_arr2(i)) := i;
+        ELSE
+          l_null_index_found := TRUE;
+        END IF;
       END LOOP;
+      
+      IF l_null_index_found
+      THEN
+        apex_debug.warn( 'Report Columns inconsistent. Check APEX_APPLICATION_PAGE_IR_RPT.REPORT_COLUMNS for this IR.' );
+      END IF;
     END transform_rpt_cols;
   BEGIN
     SELECT CASE
