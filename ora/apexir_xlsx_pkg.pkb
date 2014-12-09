@@ -172,7 +172,6 @@ AS
     FUNCTION get_sql( p_function IN VARCHAR2, p_column IN VARCHAR2 )
       RETURN VARCHAR2
     AS
-      l_retval VARCHAR2(32767);
     BEGIN
       RETURN
         CASE p_function
@@ -185,6 +184,22 @@ AS
           WHEN p_function IN ('RATIO_TO_REPORT_SUM','RATIO_TO_REPORT_COUNT') THEN ') OVER () * 100'
         END;
     END get_sql;
+    
+    FUNCTION get_label( p_function IN VARCHAR2, p_column IN VARCHAR2 )
+      RETURN VARCHAR2
+    AS
+    BEGIN
+      RETURN
+        CASE p_function
+          WHEN 'COUNT_DISTINCT' THEN 'Unique Count'
+          WHEN 'RATIO_TO_REPORT_SUM' THEN 'Percent of Total Sum'
+          WHEN 'RATIO_TO_REPORT_COUNT' THEN 'Percent of Total Count'
+          WHEN 'AVG' THEN 'Average'
+          WHEN 'MAX' THEN 'Maximum'
+          WHEN 'MIN' THEN 'Minimum'
+          ELSE INITCAP(p_function)
+        END || ' ' || g_col_settings(p_column).report_label;
+    END get_label;
   BEGIN
     FOR rec IN ( SELECT REPLACE(group_by_columns, ':', ', ') group_by_cols
                       , function_01
@@ -236,7 +251,11 @@ AS
       -- Add generated column names to column array
       -- (Manual loop, can this be areal one?)
       IF rec.function_01 IS NOT NULL THEN
-        col_rec.report_label := rec.function_label_01;
+        col_rec.report_label := COALESCE( rec.function_label_01
+                                        , get_label( p_function => rec.function_01
+                                                   , p_column   => rec.function_column_01
+                                                   )
+                                        );
         col_rec.group_by_function := get_sql( rec.function_01, rec.function_column_01);
         col_rec.format_mask := rec.function_format_mask_01;
         col_rec.is_visible := TRUE;
@@ -247,7 +266,11 @@ AS
       END IF;
       
       IF rec.function_02 IS NOT NULL THEN
-        col_rec.report_label := rec.function_label_02;
+        col_rec.report_label := COALESCE( rec.function_label_02
+                                        , get_label( p_function => rec.function_02
+                                                   , p_column   => rec.function_column_02
+                                                   )
+                                        );
         col_rec.group_by_function := get_sql( rec.function_02, rec.function_column_02);
         col_rec.format_mask := rec.function_format_mask_02;
         col_rec.is_visible := TRUE;
@@ -258,7 +281,11 @@ AS
       END IF;
 
       IF rec.function_03 IS NOT NULL THEN
-        col_rec.report_label := rec.function_label_03;
+        col_rec.report_label := COALESCE( rec.function_label_03
+                                        , get_label( p_function => rec.function_03
+                                                   , p_column   => rec.function_column_03
+                                                   )
+                                        );
         col_rec.group_by_function := get_sql( rec.function_03, rec.function_column_03);
         col_rec.format_mask := rec.function_format_mask_03;
         col_rec.is_visible := TRUE;
