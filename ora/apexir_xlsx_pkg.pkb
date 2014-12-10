@@ -1412,9 +1412,36 @@ AS
     dbms_sql.close_cursor( g_cursor_info.cursor_id );
   END print_data;
 
+  FUNCTION get_report_id
+  RETURN NUMBER
+  AS
+    l_region_id NUMBER;
+  BEGIN
+    SELECT region_id
+      INTO l_region_id
+      FROM apex_application_page_ir
+     WHERE application_id = g_apex_ir_info.application_id
+       AND page_id = g_apex_ir_info.page_id;
+    RETURN l_region_id;
+  EXCEPTION
+    WHEN TOO_MANY_ROWS THEN
+      apex_debug.ERROR( p_message => 'WARNING: More than 1 IR Region on page %s, choose p_ir_region_id!'
+                      , p0        => TO_CHAR (g_apex_ir_info.page_id)
+                      );
+      raise_application_error( num => -20002
+                             , msg => 'Error retrieving Region ID, check APEX Debug Messages!'
+                             );
+    WHEN NO_DATA_FOUND THEN
+      apex_debug.ERROR( p_message => 'WARNING: There is NO IR Region on page %s!'
+                      , p0        => TO_CHAR (g_apex_ir_info.page_id)
+                      );
+      raise_application_error( num => -20002
+                             , msg => 'Error retrieving Region ID, check APEX Debug Messages!'
+                             );    
+  END get_report_id;
   
   FUNCTION apexir2sheet
-    ( p_ir_region_id NUMBER
+    ( p_ir_region_id NUMBER := NULL
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
@@ -1439,7 +1466,7 @@ AS
     g_apex_ir_info.application_id := p_app_id;
     g_apex_ir_info.page_id := p_ir_page_id;
     g_apex_ir_info.session_id := p_ir_session_id;
-    g_apex_ir_info.region_id := p_ir_region_id;
+    g_apex_ir_info.region_id := COALESCE( p_ir_region_id, get_report_id );
     g_apex_ir_info.request := p_ir_request;
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
     g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
@@ -1517,7 +1544,7 @@ AS
   END apexir2sheet;
 
   PROCEDURE download
-    ( p_ir_region_id NUMBER
+    ( p_ir_region_id NUMBER := NULL
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
