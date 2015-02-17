@@ -72,6 +72,10 @@ AS
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
     , p_append_date IN BOOLEAN := TRUE
     );
+
+  FUNCTION get_version
+    RETURN VARCHAR2;
+
 END APEXIR_XLSX_PKG;
 
 /

@@ -1,6 +1,7 @@
 CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG" 
 AS
 
+  c_version CONSTANT VARCHAR2(5) := '1.3.0';
   /** Defines the bulk fetch size used by DBMS_SQL */
   c_bulk_size CONSTANT pls_integer := 200;
 
@@ -1464,7 +1465,7 @@ AS
                       );
       raise_application_error( num => -20002
                              , msg => 'Error retrieving Region ID, check APEX Debug Messages!'
-                             );    
+                             );
   END get_report_id;
   
   FUNCTION apexir2sheet
@@ -1618,6 +1619,13 @@ AS
       raise_application_error( -20001, 'Something went wrong while generating the file. :-(' );
     END IF;
   END download;
+
+  FUNCTION get_version
+    RETURN VARCHAR2
+  AS
+  BEGIN
+    RETURN c_version;
+  END get_version;
 
 END APEXIR_XLSX_PKG;
 
