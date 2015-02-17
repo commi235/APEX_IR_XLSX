@@ -10,8 +10,8 @@ AS
 
   /** 
   * Retrieve an interactive report as an XLSX file.
-  * @param p_ir_region_id        The region ID of the interactive report to convert to XLSX
-  * @param p_app_id              Application ID the interactive report belongs to. (derived from APEX context if not manually set)
+  * @param p_ir_region_id        The region ID of the interactive report to convert to XLSX. (derived from APEX context if not set manually)
+  * @param p_app_id              Application ID the interactive report belongs to. (derived from APEX context if not set manually)
   * @param p_ir_page_id          ID of page on which the interactive report resides. (derived from APEX context if not set manually)
   * @param p_ir_session_id       APEX session from which to take the session variables. (derived from APEX context if not set manually)
   * @param p_ir_request          Request associated with call. (derived from APEX context if not set manually)
@@ -30,7 +30,7 @@ AS
   * @return Record Type with file name, generated file, mime type, file size
   */
   FUNCTION apexir2sheet
-    ( p_ir_region_id NUMBER
+    ( p_ir_region_id NUMBER := NULL
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
@@ -49,8 +49,13 @@ AS
     )
   RETURN apexir_xlsx_types_pkg.t_returnvalue;
 
+  /**
+  * Download Interactive Report as XLSX file.
+  * This is a wrapper for APEXIR2SHEET which immediately presents the file for download.
+  */
+
   PROCEDURE download
-    ( p_ir_region_id NUMBER
+    ( p_ir_region_id NUMBER := NULL
     , p_app_id NUMBER := NV('APP_ID')
     , p_ir_page_id NUMBER := NV('APP_PAGE_ID')
     , p_ir_session_id NUMBER := NV('SESSION')
@@ -67,6 +72,10 @@ AS
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
     , p_append_date IN BOOLEAN := TRUE
     );
+
+  FUNCTION get_version
+    RETURN VARCHAR2;
+
 END APEXIR_XLSX_PKG;
 
 /
