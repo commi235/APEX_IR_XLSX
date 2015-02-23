@@ -7,6 +7,7 @@ Main benefits are that all data types are preserved and stored in a way that Exc
 
 SUPPORTED FUNCTIONALITY
 -----------------------
+*  Automatically derive Interactive Report Region ID (if only one IR on the page)
 *  Filtering and Sorting
 *  Control Breaks
 *  Computations
@@ -32,7 +33,9 @@ CURRENT LIMITATIONS
    The APEX engine only exposes the SQL query of the standard view currently.  
 4. The download only works for authenticated users.  
    The APEX engine does not give back base_report_id if user isn't authenticated.  
-   Research is currently ongoing to lift this restriction.
+   This has been identified as a bug by the APEX development Team and should be fixed with APEX 5.0 according to current information.
+5. Deriving IR only works with exactly one IR on the page.  
+   The package will put a message into the debug log if no or multiple IR regions are found.
    
 INSTALLATION
 ------------
@@ -45,53 +48,28 @@ You can also manually create the packages by running the separate package specif
 
 HOW TO USE
 ----------
-###Enable download for a single interactive report
+###Enable download with default options
 
 1. Create the interactive report region. (skip if you already have one)
-2. Run the page and inspect the source code using your browser.
-3. Mark down the value of the hidden item with id "apexir_REGION_ID" removing the "R" at the beginning.  
-   The numeric value you now have is the only mandatory input to the main function.
-4. Create button or similar element to reload page setting request to "XLSX".
-5. Create page process (sample)  
+2. Create button or similar element to reload page setting request to "XLSX".
+3. Create page process (sample)  
    Type: PL/SQL anonymous block  
    Process Point: On Load - Before Header 
    Condition Type: Request = Expression 1  
    Expression 1: XLSX  
-   Process (replace $APEXIR_REGION_ID$ with number from step above):  
+   Process:  
 ```sql
-   apexir_xlsx_pkg.download( p_ir_region_id => $APEXIR_REGION_ID$);
+   apexir_xlsx_pkg.download();
 ``` 
 
-###Enable download for all interactive reports in application  
-1. Create an application item to hold the requested interactive report id. 
-   We'll assume the item is called APEXIR_REGION_ID in the following.
-2. Create Application Computation  
-   Computation Item: APEXIR_REGION_ID  
-   Computation Point: Before Header  
-   Computation Type: SQL Query (return single value)  
-   Condition Type: Request != Expression 1  
-   Expression 1: XLSX  
-   Computation (if you have only one IR on the page):
+###Setting options (refer to package header for more)
 
+1. Disable help text on column headers  
     ```sql
-    SELECT region_id
-      FROM apex_application_page_ir
-     WHERE application_id = :APP_ID
-       AND page_id = :APP_PAGE_ID
+    apexir_xlsx_pkg.download( p_col_hdr_help => FALSE );
     ```  
 
-3. Create Application Process  
-   Type: PL/SQL anonymous block  
-   Process Point: On Load - Before Header  
-   Condition Type: Request = Expression 1  
-   Expression 1: XLSX  
-   Process:
-
+2. Do not append date to file name  
     ```sql
-    apexir_xlsx_pkg.download( p_ir_region_id => :APEXIR_REGION_ID);
+    apexir_xlsx_pkg.download( p_append_date => FALSE );
     ```
-
-4. Create button on page with interactive report.  
-   Action: Redirect to Page in this Application  
-   Page: The page you are on.  
-   Request: XLSX  
