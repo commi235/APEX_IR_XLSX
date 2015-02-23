@@ -42,6 +42,7 @@ Main benefits are that all data types are preserved and stored in a way that Exc
 <a id="supported-functionality" class="anchor" href="#supported-functionality" aria-hidden="true"><span class="octicon octicon-link"></span></a>SUPPORTED FUNCTIONALITY</h2>
 
 <ul>
+<li> Automatically derive Interactive Report Region ID (if only one IR on the page)</li>
 <li> Filtering and Sorting</li>
 <li> Control Breaks</li>
 <li> Computations</li>
@@ -71,7 +72,9 @@ The APEX engine only exposes the SQL query of the standard view currently.<br>
 </li>
 <li>The download only works for authenticated users.<br>
 The APEX engine does not give back base_report_id if user isn't authenticated.<br>
-Research is currently ongoing to lift this restriction.</li>
+This has been identified as a bug by the APEX development Team and should be fixed with APEX 5.0 according to current information.</li>
+<li>Deriving IR only works with exactly one IR on the page.<br>
+The package will put a message into the debug log if no or multiple IR regions are found.</li>
 </ol>
 
 <h2>
@@ -88,59 +91,36 @@ Libraries can be installed standalone by using "install_libs.sql".</p>
 <a id="how-to-use" class="anchor" href="#how-to-use" aria-hidden="true"><span class="octicon octicon-link"></span></a>HOW TO USE</h2>
 
 <h3>
-<a id="enable-download-for-a-single-interactive-report" class="anchor" href="#enable-download-for-a-single-interactive-report" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for a single interactive report</h3>
+<a id="enable-download-with-default-options" class="anchor" href="#enable-download-with-default-options" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download with default options</h3>
 
 <ol>
 <li>Create the interactive report region. (skip if you already have one)</li>
-<li>Run the page and inspect the source code using your browser.</li>
-<li>Mark down the value of the hidden item with id "apexir_REGION_ID" removing the "R" at the beginning.<br>
-The numeric value you now have is the only mandatory input to the main function.</li>
 <li>Create button or similar element to reload page setting request to "XLSX".</li>
 <li>Create page process (sample)<br>
 Type: PL/SQL anonymous block<br>
 Process Point: On Load - Before Header 
 Condition Type: Request = Expression 1<br>
 Expression 1: XLSX<br>
-Process (replace $APEXIR_REGION_ID$ with number from step above):<br>
+Process:<br>
 </li>
 </ol>
 
-<div class="highlight highlight-sql"><pre>   <span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_ir_region_id <span class="pl-k">=&gt;</span> $APEXIR_REGION_ID$);</pre></div>
+<div class="highlight highlight-sql"><pre>   <span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>();</pre></div>
 
 <h3>
-<a id="enable-download-for-all-interactive-reports-in-application" class="anchor" href="#enable-download-for-all-interactive-reports-in-application" aria-hidden="true"><span class="octicon octicon-link"></span></a>Enable download for all interactive reports in application</h3>
+<a id="setting-options-refer-to-package-header-for-more" class="anchor" href="#setting-options-refer-to-package-header-for-more" aria-hidden="true"><span class="octicon octicon-link"></span></a>Setting options (refer to package header for more)</h3>
 
 <ol>
-<li>Create an application item to hold the requested interactive report id. 
-We'll assume the item is called APEXIR_REGION_ID in the following.</li>
 <li>
-<p>Create Application Computation<br>
-Computation Item: APEXIR_REGION_ID<br>
-Computation Point: Before Header<br>
-Computation Type: SQL Query (return single value)<br>
-Condition Type: Request != Expression 1<br>
-Expression 1: XLSX<br>
-Computation (if you have only one IR on the page):</p>
+<p>Disable help text on column headers  </p>
 
-<div class="highlight highlight-sql"><pre><span class="pl-k">SELECT</span> region_id
-  <span class="pl-k">FROM</span> apex_application_page_ir
- <span class="pl-k">WHERE</span> application_id <span class="pl-k">=</span> :APP_ID
-   <span class="pl-k">AND</span> page_id <span class="pl-k">=</span> :APP_PAGE_ID</pre></div>
+<div class="highlight highlight-sql"><pre><span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_col_hdr_help <span class="pl-k">=&gt;</span> FALSE );</pre></div>
 </li>
 <li>
-<p>Create Application Process<br>
-Type: PL/SQL anonymous block<br>
-Process Point: On Load - Before Header<br>
-Condition Type: Request = Expression 1<br>
-Expression 1: XLSX<br>
-Process:</p>
+<p>Do not append date to file name  </p>
 
-<div class="highlight highlight-sql"><pre><span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_ir_region_id <span class="pl-k">=&gt;</span> :APEXIR_REGION_ID);</pre></div>
+<div class="highlight highlight-sql"><pre><span class="pl-c1">apexir_xlsx_pkg</span>.<span class="pl-c1">download</span>( p_append_date <span class="pl-k">=&gt;</span> FALSE );</pre></div>
 </li>
-<li><p>Create button on page with interactive report.<br>
-Action: Redirect to Page in this Application<br>
-Page: The page you are on.<br>
-Request: XLSX  </p></li>
 </ol>
       </section>
     </div>
