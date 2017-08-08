@@ -146,8 +146,10 @@ AS
   * Holds the selected options and calculated settings for the XLSX generation.
   * @param show_title            Show header line with report title
   * @param show_filters          Show header lines with filter settings
+  * @param include_page_items    Include used page items in filter details
   * @param show_column_headers   Show column headers before data
   * @param col_hdr_help          Include help text on column headers
+  * @param freeze_column_headers Freeze the column header row
   * @param process_highlights    Format data according to highlights
   * @param show_highlights       Show header lines with highlight settings, not useful if set without above
   * @param show_aggregates       Process aggregates and show on total lines
@@ -165,8 +167,10 @@ AS
   TYPE t_xlsx_options IS RECORD
     ( show_title BOOLEAN
     , show_filters BOOLEAN
+    , include_page_items BOOLEAN
     , show_column_headers BOOLEAN
     , col_hdr_help BOOLEAN
+    , freeze_column_headers BOOLEAN
     , process_highlights BOOLEAN
     , show_highlights BOOLEAN
     , show_aggregates BOOLEAN
@@ -177,6 +181,7 @@ AS
     , allow_wrap_text BOOLEAN
     , original_line_break VARCHAR2(10)
     , replace_line_break VARCHAR2(10)
+    , filter_replacement VARCHAR2(10)
     , default_date_format VARCHAR2(100)
     , append_date_file_name BOOLEAN
     , requested_view_mode VARCHAR2(8)

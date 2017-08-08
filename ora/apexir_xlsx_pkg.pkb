@@ -1,7 +1,21 @@
 CREATE OR REPLACE PACKAGE BODY "APEXIR_XLSX_PKG" 
 AS
 
-  c_version CONSTANT VARCHAR2(5) := '1.3.0';
+  c_version CONSTANT VARCHAR2(6) := '1.3.1b';
+
+  /** Named exceptions for identified restrictions */
+  column_not_found EXCEPTION;
+  ir_region_not_found EXCEPTION;
+  multiple_ir_regions EXCEPTION;
+  ir_def_not_found EXCEPTION;
+  
+  /** Additional Exception Info */
+  c_column_not_found CONSTANT VARCHAR2(4000) :=
+'Error: Column "#COL#" is used in a highlight condition but not in the displayed columns.
+If you add the highlight condition column to the displayed columns, then the Excel file will download properly.
+You would then have the option to exclude that column in your Excel reporting.';
+  g_exception_info VARCHAR2(4000);
+  
   /** Defines the bulk fetch size used by DBMS_SQL */
   c_bulk_size CONSTANT pls_integer := 200;
 
@@ -60,6 +74,17 @@ AS
 /** Support Procedures */
 
   /**
+  * Wraps a column alias with double quotes.
+  */
+  FUNCTION wrap_col (p_column IN VARCHAR2)
+    RETURN VARCHAR2
+  AS
+  BEGIN
+    RETURN '"' || p_column || '"';
+  END wrap_col;
+
+
+  /**
   * Retrieve report title and populate global variable.
   */
   PROCEDURE get_report_title_type
@@ -87,6 +112,7 @@ AS
       END IF;
     END transform_rpt_cols;
   BEGIN
+    /* Could raise no data found. Check out why... */
     SELECT CASE
              WHEN rpt.report_name IS NOT NULL THEN
                ir.region_name || ' - ' || rpt.report_name
@@ -108,6 +134,15 @@ AS
        AND rpt.session_id = g_apex_ir_info.session_id
     ;
     transform_rpt_cols;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      apex_debug.error( p_message => 'Could not find IR runtime definition.' );
+      apex_debug.error( p_message => 'Application ID: %s', p0 => g_apex_ir_info.application_id );
+      apex_debug.error( p_message => 'Page ID: %s', p0 => g_apex_ir_info.page_id );
+      apex_debug.error( p_message => 'Base Report ID: %s', p0 => g_apex_ir_info.base_report_id );
+      apex_debug.error( p_message => 'Session ID: %s', p0 => g_apex_ir_info.session_id );
+      g_exception_info := 'IR definition not found. Please contact your application administrator.';
+      RAISE ir_def_not_found;
   END get_report_title_type;
 
   /**
@@ -180,7 +215,7 @@ AS
           WHEN 'RATIO_TO_REPORT_SUM' THEN 'ratio_to_report(sum('
           WHEN 'RATIO_TO_REPORT_COUNT' THEN 'ratio_to_report(count('
           ELSE p_function || '('
-        END || p_column || ')' ||
+        END || wrap_col(p_column) || ')' ||
         CASE
           WHEN p_function IN ('RATIO_TO_REPORT_SUM','RATIO_TO_REPORT_COUNT') THEN ') OVER () * 100'
         END;
@@ -437,7 +472,7 @@ AS
           g_col_settings(l_cur_col).is_break_col := TRUE;
           IF g_col_settings(l_cur_col).is_visible THEN
             g_apex_ir_info.aggregate_type_disp_column := g_apex_ir_info.aggregate_type_disp_column + 1;
-            g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || 'to_char(' || l_cur_col || ') || ';
+            g_apex_ir_info.final_sql := g_apex_ir_info.final_sql || 'to_char(' || wrap_col(l_cur_col) || ') || ';
           END IF;
         END IF;
         l_aggregate_col_offset := g_apex_ir_info.aggregates_offset; -- reset offset to global offset for every new column
@@ -500,7 +535,13 @@ AS
   AS
     l_retval VARCHAR2(4000) := p_display;
   BEGIN
-    l_retval := REPLACE( l_retval, '#APXWS_COL_NAME#', g_col_settings(p_column_name).report_label );
+    l_retval := REPLACE( l_retval
+                       , '#APXWS_COL_NAME#'
+                       , REPLACE( g_col_settings(p_column_name).report_label
+                                , g_xlsx_options.original_line_break
+                                , g_xlsx_options.filter_replacement 
+                                )
+                       );
     l_retval := REPLACE( l_retval, '#APXWS_OP_NAME#', p_operator );
     l_retval := REPLACE( l_retval, '#APXWS_AND#', 'and' );
     IF INSTR( l_retval, '#APXWS_EXPR_DATE#') > 0 OR INSTR(l_retval, '#APXWS_EXPR2_DATE#' ) > 0 THEN
@@ -524,12 +565,14 @@ AS
     col_rec apexir_xlsx_types_pkg.t_apex_ir_highlight;
     hl_num NUMBER := 0;
     l_apxws_expr_vals apex_application_global.vc_arr2;
+    
     FUNCTION wrap_exp (p_exp IN VARCHAR2)
       RETURN VARCHAR2
     AS
     BEGIN
       RETURN '''' || p_exp || '''';
     END wrap_exp;
+    
   BEGIN
     FOR rec IN (SELECT condition_name,
                        CASE
@@ -563,6 +606,16 @@ AS
                 ORDER BY cond.condition_column_name, cond.highlight_sequence
                )
     LOOP
+      IF NOT g_report_cols.exists(rec.condition_column_name) THEN
+        g_exception_info := REPLACE( c_column_not_found
+                                   , '#COL#'
+                                   , CASE WHEN g_col_settings.exists(rec.condition_column_name) 
+                                            THEN g_col_settings(rec.condition_column_name).report_label
+                                          ELSE rec.condition_column_name
+                                     END
+                                  );
+        RAISE column_not_found;
+      END IF;
       IF g_col_settings.EXISTS(rec.condition_column_name) THEN
         hl_num := hl_num + 1;
         col_rec.bg_color := rec.bg_color;
@@ -579,6 +632,7 @@ AS
         END IF;
         -- Store and replace static part
         col_rec.highlight_sql := REPLACE(rec.condition_sql, '#APXWS_HL_ID#', 1);
+        col_rec.highlight_sql := REPLACE(col_rec.highlight_sql, '#APXWS_CC_EXPR#', wrap_col(rec.condition_column_name) );
         
         IF LOWER(rec.condition_operator) IN ('in', 'not in')
         THEN -- IN and NOT IN need special handling as the amount of values is unclear
@@ -688,6 +742,29 @@ AS
     END LOOP;
   END fix_borders;
 
+  PROCEDURE print_header_row( p_value IN VARCHAR2 )
+  AS
+  BEGIN
+    xlsx_builder_pkg.mergecells( p_tl_col => 1
+                               , p_tl_row => g_current_disp_row
+                               , p_br_col => g_xlsx_options.display_column_count
+                               , p_br_row => g_current_disp_row
+                               , p_sheet => g_xlsx_options.sheet
+                               );
+    xlsx_builder_pkg.cell( p_col => 1
+                         , p_row => g_current_disp_row
+                         , p_value => p_value
+                         , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
+                                                                , p_fgRGB => 'FFF8DC'
+                                                                )
+                         , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
+                                                                        , p_horizontal => 'center'
+                                                                        )
+                         , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
+                         , p_sheet => g_xlsx_options.sheet );
+    fix_borders;
+    g_current_disp_row := g_current_disp_row + 1;
+  END print_header_row;
   /**
   * Prints the filter definitions to the spreadsheet.
   */
@@ -721,7 +798,8 @@ AS
         l_condition_display := rec.condition_name;
       ELSE
         -- Filters for removed columns can still exist, skip if column not defined in IR
-        IF g_report_cols.EXISTS(rec.condition_column_name) THEN
+        /* !TODO: Think about logic again... */
+        IF g_col_settings.EXISTS(rec.condition_column_name) THEN
           l_condition_display := display_for_condition( p_column_name => rec.condition_column_name
                                                       , p_display => rec.condition_display
                                                       , p_operator => rec.condition_operator
@@ -732,27 +810,36 @@ AS
           CONTINUE; -- skip filter if column isn't existing anymore
         END IF;
       END IF;
-      xlsx_builder_pkg.mergecells( p_tl_col => 1
-                                 , p_tl_row => g_current_disp_row
-                                 , p_br_col => g_xlsx_options.display_column_count
-                                 , p_br_row => g_current_disp_row
-                                 , p_sheet => g_xlsx_options.sheet
-                                 );
-      xlsx_builder_pkg.cell( p_col => 1
-                           , p_row => g_current_disp_row
-                           , p_value => l_condition_display
-                           , p_fillId => xlsx_builder_pkg.get_fill( p_patternType => 'solid'
-                                                                  , p_fgRGB => 'FFF8DC'
-                                                                  )
-                           , p_alignment => xlsx_builder_pkg.get_alignment( p_vertical => 'center'
-                                                                          , p_horizontal => 'center'
-                                                                          )
-                           , p_borderId => xlsx_builder_pkg.get_border('thin', 'thin', 'thin', 'thin')
-                           , p_sheet => g_xlsx_options.sheet );
-      fix_borders;
-      g_current_disp_row := g_current_disp_row + 1;
+      print_header_row( p_value => l_condition_display );
     END LOOP;
   END print_filter_header;
+
+  PROCEDURE print_page_items
+  AS
+    TYPE t_page_items IS TABLE OF apex_application_page_items.label%TYPE INDEX BY apex_application_page_items.item_name%TYPE;
+    l_page_items t_page_items;
+    FUNCTION format_value( p_item_label IN VARCHAR2, p_bind_value IN VARCHAR2)
+      RETURN VARCHAR2
+    AS
+    BEGIN
+      RETURN p_item_label || ' = ' || p_bind_value;
+    END format_value;
+  BEGIN
+    FOR rec IN ( SELECT item_name, label
+                   FROM apex_application_page_items
+                  WHERE application_id = g_apex_ir_info.application_id
+                    AND page_id = g_apex_ir_info.page_id
+               )
+    LOOP
+      l_page_items(rec.item_name) := rec.label;
+    END LOOP;
+    
+    FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP 
+      IF l_page_items.exists(g_apex_ir_info.report_definition.binds(i).name) THEN
+        print_header_row( p_value => format_value(l_page_items(g_apex_ir_info.report_definition.binds(i).name), g_apex_ir_info.report_definition.binds(i).value) );
+      END IF;
+    END LOOP;
+  END print_page_items;
 
   /**
   * Prints the header parts.
@@ -790,6 +877,9 @@ AS
     END IF;
     IF g_xlsx_options.show_filters THEN
       print_filter_header;
+    END IF;
+    IF g_xlsx_options.include_page_items THEN
+      print_page_items;
     END IF;
     IF g_xlsx_options.show_highlights THEN
       l_cur_hl_name := g_row_highlights.FIRST();
@@ -867,14 +957,33 @@ AS
                                    END
                                 || ' ) ' || g_apex_ir_info.group_by_sort;
     ELSE
-      -- Split sql query on first from and inject highlight conditions
-      g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'))
+      -- Totally new because of highlights on computed columns
+      
+      g_apex_ir_info.final_sql := 'SELECT orig.*'
                                || g_apex_ir_info.final_sql
-                               || SUBSTR(apex_plugin_util.replace_substitutions(g_apex_ir_info.report_definition.sql_query), INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ' FROM'));
+                               || ' FROM ( '
+                               || g_apex_ir_info.report_definition.sql_query
+                               || ' ) orig'
+                               ;
+      
+      -- Split sql query on first from and inject highlight conditions
+/*      g_apex_ir_info.final_sql := SUBSTR(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), 'FROM') - 1) || ' '
+                               || g_apex_ir_info.final_sql || ' '
+                               || SUBSTR(apex_plugin_util.replace_substitutions(g_apex_ir_info.report_definition.sql_query), INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), 'FROM'));
+*/
     END IF;
     g_cursor_info.cursor_id := dbms_sql.open_cursor;
     dbms_sql.parse( g_cursor_info.cursor_id, g_apex_ir_info.final_sql, dbms_sql.NATIVE );
     dbms_sql.describe_columns2( g_cursor_info.cursor_id, g_cursor_info.column_count, l_desc_tab );
+    
+    apex_debug.message( p_message => 'Cursor Describe Result' );
+    FOR i IN 1..l_desc_tab.count LOOP
+      apex_debug.message( p_message => 'Column: %s -> Data Type: %s'
+                        , p0 => l_desc_tab(i).col_name
+                        , p1 => l_desc_tab(i).col_type
+                        , p_force => TRUE
+                        );
+    END LOOP;
 
     /* Bind values from IR structure*/
     FOR i IN 1..g_apex_ir_info.report_definition.binds.count LOOP
@@ -887,44 +996,53 @@ AS
 
     /* Amend column settings*/
     FOR c IN 1 .. g_cursor_info.column_count LOOP
-      g_sql_columns(c).col_name := l_desc_tab(c).col_name;
-      CASE
-        WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
-          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.num_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_data_type := c_col_data_type_num;
-        WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
-          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.date_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_data_type := c_col_data_type_date;
-        WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96 ) THEN
-          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.vc_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_data_type := c_col_data_type_vc;
-        WHEN l_desc_tab( c ).col_type = 112 THEN
-          dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.clob_tab, c_bulk_size, 1 );
-          g_sql_columns(c).col_data_type := c_col_data_type_clob;
-        ELSE
-          NULL;
-      END CASE;
-
-      IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
-        IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
-          g_xlsx_options.display_column_count := g_xlsx_options.display_column_count + 1; -- count number of displayed columns
-          g_sql_columns(c).is_displayed := TRUE;
-          g_sql_columns(c).col_type := c_display_column;
-          g_col_settings(l_desc_tab(c).col_name).sql_col_num := c; -- column in SQL
-          g_col_settings(l_desc_tab(c).col_name).display_column := g_xlsx_options.display_column_count; -- column in spreadsheet
+      BEGIN
+        g_sql_columns(c).col_name := l_desc_tab(c).col_name;
+        CASE
+          WHEN l_desc_tab( c ).col_type IN ( 2, 100, 101 ) THEN
+            dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.num_tab, c_bulk_size, 1 );
+            g_sql_columns(c).col_data_type := c_col_data_type_num;
+          WHEN l_desc_tab( c ).col_type IN ( 12, 178, 179, 180, 181 , 231 ) THEN
+            dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.date_tab, c_bulk_size, 1 );
+            g_sql_columns(c).col_data_type := c_col_data_type_date;
+          WHEN l_desc_tab( c ).col_type IN ( 1, 8, 9, 96 ) THEN
+            dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.vc_tab, c_bulk_size, 1 );
+            g_sql_columns(c).col_data_type := c_col_data_type_vc;
+          WHEN l_desc_tab( c ).col_type = 112 THEN
+            dbms_sql.define_array( g_cursor_info.cursor_id, c, g_cursor_info.clob_tab, c_bulk_size, 1 );
+            g_sql_columns(c).col_data_type := c_col_data_type_clob;
+          ELSE
+            NULL;
+        END CASE;
+  
+        IF g_col_settings.exists(l_desc_tab(c).col_name) THEN
+          IF g_col_settings(l_desc_tab(c).col_name).is_visible THEN -- remove hidden cols
+            g_xlsx_options.display_column_count := g_xlsx_options.display_column_count + 1; -- count number of displayed columns
+            g_sql_columns(c).is_displayed := TRUE;
+            g_sql_columns(c).col_type := c_display_column;
+            g_col_settings(l_desc_tab(c).col_name).sql_col_num := c; -- column in SQL
+            g_col_settings(l_desc_tab(c).col_name).display_column := g_xlsx_options.display_column_count; -- column in spreadsheet
+          END IF;
+        ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
+          g_row_highlights(l_desc_tab(c).col_name).col_num := c;
+          g_sql_columns(c).col_type := c_row_highlight;
+        ELSIF g_col_highlights.EXISTS(l_desc_tab(c).col_name) THEN
+          g_col_highlights(l_desc_tab(c).col_name).col_num := c;
+          g_sql_columns(c).col_type := c_column_highlight;
+          l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
+          g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
+        ELSIF l_desc_tab(c).col_name = c_break_definition THEN
+          g_sql_columns(c).col_type := c_break_definition;
+          g_apex_ir_info.break_def_column := c;
         END IF;
-      ELSIF g_row_highlights.EXISTS(l_desc_tab(c).col_name) THEN
-        g_row_highlights(l_desc_tab(c).col_name).col_num := c;
-        g_sql_columns(c).col_type := c_row_highlight;
-      ELSIF g_col_highlights.EXISTS(l_desc_tab(c).col_name) THEN
-        g_col_highlights(l_desc_tab(c).col_name).col_num := c;
-        g_sql_columns(c).col_type := c_column_highlight;
-        l_cur_col_highlight := g_col_highlights(l_desc_tab(c).col_name);
-        g_col_settings(l_cur_col_highlight.affected_column).highlight_conds(l_desc_tab(c).col_name) := l_cur_col_highlight;
-      ELSIF l_desc_tab(c).col_name = c_break_definition THEN
-        g_sql_columns(c).col_type := c_break_definition;
-        g_apex_ir_info.break_def_column := c;
-      END IF;
+$IF NOT $$PLSQL_DEBUG $THEN
+      EXCEPTION
+        WHEN OTHERS THEN
+          apex_debug.error(p_message => 'Error for column: %s', p0 => l_desc_tab(c).col_name);
+          apex_debug.error(p_message => 'Backtrace: %s', p0 => dbms_utility.format_error_backtrace);
+          RAISE;
+$END
+      END;
     END LOOP;
   END prepare_cursor;
 
@@ -1477,14 +1595,18 @@ AS
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
     , p_col_hdr_help BOOLEAN := TRUE
+    , p_freeze_col_hdr BOOLEAN := FALSE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
+    , p_include_page_items IN BOOLEAN := FALSE
     , p_show_highlights IN BOOLEAN := TRUE
     , p_original_line_break IN VARCHAR2 := '<br />'
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_filter_replacement IN VARCHAR2 := ' '
     , p_append_date IN BOOLEAN := TRUE
+    , p_append_date_fmt IN VARCHAR2 := 'YYYYMMDD'
     )
   RETURN apexir_xlsx_types_pkg.t_returnvalue
   AS
@@ -1498,6 +1620,9 @@ AS
     g_apex_ir_info.request := p_ir_request;
     g_apex_ir_info.base_report_id := apex_ir.get_last_viewed_report_id(p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id); -- set manual for test outside APEX Environment
     g_apex_ir_info.report_definition := APEX_IR.GET_REPORT ( p_page_id => g_apex_ir_info.page_id, p_region_id => g_apex_ir_info.region_id);
+    apex_debug.message( p_message => 'Size of SQL statement is %s'
+                      , p0 => LENGTH( g_apex_ir_info.report_definition.sql_query )
+                      );
     g_apex_ir_info.aggregates_offset := regexp_count(substr(g_apex_ir_info.report_definition.sql_query, 1, INSTR(UPPER(g_apex_ir_info.report_definition.sql_query), ') OVER (')), ',');
     -- Fix the IR view mode if requested
     IF p_ir_view_mode IN (c_ir_standard_view, c_ir_group_by_view) THEN
@@ -1509,15 +1634,18 @@ AS
     g_xlsx_options.process_highlights := p_process_highlights;
     g_xlsx_options.show_title := p_show_report_title;
     g_xlsx_options.show_filters := p_show_filters;
+    g_xlsx_options.include_page_items := p_include_page_items;
     g_xlsx_options.show_highlights := p_show_highlights;
     g_xlsx_options.show_column_headers := p_column_headers;
     g_xlsx_options.col_hdr_help := p_col_hdr_help;
+    g_xlsx_options.freeze_column_headers := p_freeze_col_hdr;
     g_xlsx_options.display_column_count := 0; -- shift result set to right if > 0
     g_xlsx_options.default_font := 'Arial';
     g_xlsx_options.default_border_color := 'b0a070'; -- not yet implemented...
     g_xlsx_options.allow_wrap_text := TRUE;
     g_xlsx_options.original_line_break := p_original_line_break;
     g_xlsx_options.replace_line_break := p_replace_line_break;
+    g_xlsx_options.filter_replacement := p_filter_replacement;
     g_xlsx_options.append_date_file_name := p_append_date;
     g_xlsx_options.requested_view_mode := p_ir_view_mode;
 
@@ -1536,6 +1664,9 @@ AS
     -- print column headings if enabled
     IF g_xlsx_options.show_column_headers THEN
       print_column_headers;
+      IF g_xlsx_options.freeze_column_headers THEN
+        xlsx_builder_pkg.freeze_rows(g_current_disp_row-1);
+      END IF;
     END IF;
 
     -- Generate the "real" data
@@ -1547,28 +1678,43 @@ AS
                                );
     -- return the generated spreadsheet and file info                             
     l_retval.file_content := xlsx_builder_pkg.FINISH;
-    l_retval.file_name := g_apex_ir_info.report_title || CASE WHEN g_xlsx_options.append_date_file_name THEN '_' || to_char(SYSDATE, 'YYYYMMDD') ELSE NULL END || '.xlsx';
+    l_retval.file_name := g_apex_ir_info.report_title 
+                       || CASE WHEN g_xlsx_options.append_date_file_name 
+                                 THEN '_' || to_char(SYSDATE, p_append_date_fmt)
+                               ELSE NULL 
+                          END
+                       || '.xlsx';
     l_retval.mime_type := 'application/octet';
     l_retval.file_size := dbms_lob.getlength(l_retval.file_content);
     RETURN l_retval;
-  EXCEPTION
+$IF NOT $$PLSQL_DEBUG $THEN
+    EXCEPTION
+    WHEN column_not_found THEN
+      apex_debug.error( p_message => g_exception_info );
+      raise_application_error(-20003, g_exception_info);
+    WHEN ir_def_not_found THEN
+      raise_application_error(-20004, g_exception_info);
     WHEN OTHERS THEN
       IF dbms_sql.is_open( g_cursor_info.cursor_id ) THEN
         dbms_sql.close_cursor( g_cursor_info.cursor_id );
       END IF;
-      apex_debug.message( p_message => 'Unexpected error while generating file.'
-                        , p_level => apex_debug.c_log_level_error
-                        , p_force => true
-                        );
-      apex_debug.log_long_message( p_message => 'Error Backtrace: ' || dbms_utility.format_error_backtrace
-                                 , p_level => apex_debug.c_log_level_error
-                                 , p_enabled => true
-                                 );                  
-      apex_debug.log_long_message( p_message => 'Generated SQL: ' || g_apex_ir_info.final_sql
-                                 , p_level => apex_debug.c_log_level_error
-                                 );
+      apex_debug.error( p_message => 'Unexpected error while generating file.' );
+      apex_debug.error( p_message => 'Error Backtrace: %s'
+                      , p0 => dbms_utility.format_error_backtrace
+                      , p_max_length => 32000
+                      );
+      apex_debug.error( p_message => 'Error Stack: %s'
+                      , p0 => dbms_utility.format_error_stack
+                      , p_max_length => 32000
+                      );
+      apex_debug.error( p_message => 'Generated SQL: %s'
+                      , p0 => g_apex_ir_info.final_sql
+                      , p_max_length => 32000
+                      );
+      RAISE;
       l_retval.error_encountered := TRUE;
       RETURN l_retval;
+$END
   END apexir2sheet;
 
   PROCEDURE download
@@ -1580,34 +1726,42 @@ AS
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
     , p_col_hdr_help BOOLEAN := TRUE
+    , p_freeze_col_hdr BOOLEAN := FALSE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
+    , p_include_page_items IN BOOLEAN := FALSE
     , p_show_highlights IN BOOLEAN := TRUE
     , p_original_line_break IN VARCHAR2 := '<br />'
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_filter_replacement IN VARCHAR2 := ' '
     , p_append_date IN BOOLEAN := TRUE
+    , p_append_date_fmt IN VARCHAR2 := 'YYYYMMDD'
     )
   AS
     l_xlsx apexir_xlsx_types_pkg.t_returnvalue;
   BEGIN
-    l_xlsx := apexir2sheet( p_ir_region_id
-                          , p_app_id
-                          , p_ir_page_id
-                          , p_ir_session_id
-                          , p_ir_request
-                          , p_ir_view_mode
-                          , p_column_headers
-                          , p_col_hdr_help
-                          , p_aggregates
-                          , p_process_highlights
-                          , p_show_report_title
-                          , p_show_filters
-                          , p_show_highlights
-                          , p_original_line_break
-                          , p_replace_line_break
-                          , p_append_date
+    l_xlsx := apexir2sheet( p_ir_region_id => p_ir_region_id
+                          , p_app_id => p_app_id
+                          , p_ir_page_id => p_ir_page_id
+                          , p_ir_session_id => p_ir_session_id
+                          , p_ir_request => p_ir_request
+                          , p_ir_view_mode => p_ir_view_mode
+                          , p_column_headers => p_column_headers
+                          , p_col_hdr_help => p_col_hdr_help
+                          , p_freeze_col_hdr => p_freeze_col_hdr
+                          , p_aggregates => p_aggregates
+                          , p_process_highlights => p_process_highlights
+                          , p_show_report_title => p_show_report_title
+                          , p_show_filters => p_show_filters
+                          , p_include_page_items => p_include_page_items
+                          , p_show_highlights => p_show_highlights
+                          , p_original_line_break => p_original_line_break
+                          , p_replace_line_break => p_replace_line_break
+                          , p_filter_replacement => p_filter_replacement
+                          , p_append_date => p_append_date
+                          , p_append_date_fmt => p_append_date_fmt
                           );
     IF NOT l_xlsx.error_encountered THEN
       OWA_UTIL.mime_header( l_xlsx.mime_type, FALSE );
@@ -1616,7 +1770,7 @@ AS
       OWA_UTIL.http_header_close;
       WPG_DOCLOAD.download_file( l_xlsx.file_content );
     ELSE
-      raise_application_error( -20001, 'Something went wrong while generating the file. :-(' );
+      raise_application_error( -20001, 'Something went wrong while generating the file. :-(', true );
     END IF;
   END download;
 

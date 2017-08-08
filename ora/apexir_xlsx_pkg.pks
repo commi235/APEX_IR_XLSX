@@ -23,10 +23,13 @@ AS
   * @param p_process_highlights  Determines if highlights should be considered to color rows and cells. Default: TRUE
   * @param p_show_report_title   Determines if a report title should be rendered as a headline. Default: TRUE
   * @param p_show_filters        Determines if active filters should be rendered as headlines. Default: TRUE
+  * @param p_include_page_items  Determines if used page items should be rendered as headlines. Default: FALSE
   * @param p_show_highlights     Determines if highlight definitions should be rendered as headlines. Default: TRUE
   * @param p_original_line_break Set to the line break used for normal display of the interactive report. Default: &lt;br /&gt;
   * @param p_replace_line_break  Sets the line break used in the XLSX file, replaces original line break set above. Default: \r\n
+  * @param p_filter_replacement  Sets the value to be used when replacing original line break in filter display row. Default is one blank
   * @param p_append_date         Determines if the current date (Format: YYYYMMDD) should be appended to the generated file name. Default: TRUE
+  * @param p_append_date_fmt     The date format to be used when appending current date to filename. Default: YYYYMMDD
   * @return Record Type with file name, generated file, mime type, file size
   */
   FUNCTION apexir2sheet
@@ -38,14 +41,18 @@ AS
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
     , p_col_hdr_help BOOLEAN := TRUE
+    , p_freeze_col_hdr BOOLEAN := FALSE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
+    , p_include_page_items IN BOOLEAN := FALSE
     , p_show_highlights IN BOOLEAN := TRUE
     , p_original_line_break IN VARCHAR2 := '<br />'
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_filter_replacement IN VARCHAR2 := ' '
     , p_append_date IN BOOLEAN := TRUE
+    , p_append_date_fmt IN VARCHAR2 := 'YYYYMMDD'
     )
   RETURN apexir_xlsx_types_pkg.t_returnvalue;
 
@@ -63,14 +70,18 @@ AS
     , p_ir_view_mode VARCHAR2 := NULL
     , p_column_headers BOOLEAN := TRUE
     , p_col_hdr_help BOOLEAN := TRUE
+    , p_freeze_col_hdr BOOLEAN := FALSE
     , p_aggregates IN BOOLEAN := TRUE
     , p_process_highlights IN BOOLEAN := TRUE
     , p_show_report_title IN BOOLEAN := TRUE
     , p_show_filters IN BOOLEAN := TRUE
+    , p_include_page_items IN BOOLEAN := FALSE
     , p_show_highlights IN BOOLEAN := TRUE
     , p_original_line_break IN VARCHAR2 := '<br />'
     , p_replace_line_break IN VARCHAR2 := chr(13) || chr(10)
+    , p_filter_replacement IN VARCHAR2 := ' '
     , p_append_date IN BOOLEAN := TRUE
+    , p_append_date_fmt IN VARCHAR2 := 'YYYYMMDD'
     );
 
   FUNCTION get_version
